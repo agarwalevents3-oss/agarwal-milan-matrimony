@@ -30,6 +30,7 @@ export const BUCKETS = {
   photos: "profile-photos",
   aadhaar: "aadhaar-documents",
   certificates: "educational-documents",
+  siteAssets: "site-assets",
 } as const;
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -139,4 +140,41 @@ export async function uploadDocument(
 export function photoUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKETS.photos}/${path}`;
+}
+
+/**
+ * Uploads a website image from the admin CMS (PRD §13).
+ *
+ * Compressed like everything else, but to a wider maximum — these are hero and
+ * section images that span the page, not thumbnails. Only an admin can write to
+ * this bucket; the storage policy enforces that, not this function.
+ */
+export async function uploadSiteImage(
+  file: File,
+  slot: string,
+  onProgress?: (label: string) => void,
+): Promise<{ path: string }> {
+  if (!IMAGE_TYPES.includes(file.type)) {
+    throw new UploadError("Please choose a JPG, PNG or WebP image.");
+  }
+
+  onProgress?.("Optimising…");
+  const optimised = await toWebp(file, { maxWidthOrHeight: 1600, maxSizeMB: 0.4 });
+
+  const path = `${slot}/${nanoid(21)}.webp`;
+
+  onProgress?.("Uploading…");
+  const supabase = createClient();
+  const { error } = await supabase.storage.from(BUCKETS.siteAssets).upload(path, optimised, {
+    contentType: "image/webp", cacheControl: "31536000", upsert: false,
+  });
+  if (error) throw new UploadError("We could not upload that image. Please try again.");
+
+  return { path };
+}
+
+/** Public CDN URL for a website image. */
+export function siteAssetUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKETS.siteAssets}/${path}`;
 }

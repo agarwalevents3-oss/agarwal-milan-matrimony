@@ -19,7 +19,7 @@ way it does.
 | Storage | Supabase Storage, four buckets |
 | Server logic | Next.js Route Handlers (Node runtime) |
 | Hosting | Vercel |
-| Tests | Vitest + PGlite (in-process Postgres), Playwright |
+| Tests | Vitest + PGlite (in-process Postgres), Playwright (E2E) |
 
 ---
 
@@ -32,8 +32,9 @@ npm run check                     # typecheck, lint, schema, tests
 npm run dev
 ```
 
-`npm run check` works with no Supabase project at all — the schema and all 76
-tests run against an in-process Postgres.
+`npm run check` works with no Supabase project at all — the schema and all
+database tests run against an in-process Postgres. `npm run check:all` adds the
+production build, the secret scan and the end-to-end suite.
 
 ### Connecting a Supabase project
 
@@ -68,7 +69,9 @@ tests run against an in-process Postgres.
 |---|---|
 | `npm run dev` | Development server |
 | `npm run check` | Typecheck + lint + schema + tests — run this before pushing |
-| `npm test` | All 76 tests |
+| `npm test` | Unit and database tests (88) |
+| `npm run test:e2e` | End-to-end tests (81) |
+| `npm run check:all` | Everything, including build and E2E |
 | `npm run test:db` | Security and business-rule tests only |
 | `npm run verify:schema` | Applies every migration to a throwaway Postgres |
 | `npm run verify:no-secrets` | Fails if a secret reached the client bundle |

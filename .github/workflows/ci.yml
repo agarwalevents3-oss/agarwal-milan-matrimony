@@ -53,6 +53,28 @@ jobs:
           OTP_HASH_SECRET: ci-placeholder-otp-hash-secret
           CRON_SECRET: ci-placeholder-cron-secret
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Public site, access control, form validation and the API contract.
+      # The full journey needs a live project — see e2e/README.md.
+      - name: End-to-end tests
+        run: npm run test:e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-build-only
+          REGISTRATION_TICKET_SECRET: ci-placeholder-registration-ticket-secret
+          OTP_HASH_SECRET: ci-placeholder-otp-hash-secret
+          CRON_SECRET: ci-placeholder-cron-secret
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   migrate:
     # Migrations are applied from CI only, never by hand in the dashboard, so
     # the files in supabase/migrations are always the truth about production.

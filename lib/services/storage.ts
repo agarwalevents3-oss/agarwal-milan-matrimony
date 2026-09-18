@@ -21,6 +21,14 @@ export const BUCKETS = {
   siteAssets: "site-assets",
 } as const;
 
+/** Slots the public website renders images into (PRD §13). */
+export const IMAGE_SLOTS = {
+  hero: "Hero image",
+  couple: "Couple / lifestyle image",
+} as const;
+
+export type ImageSlot = keyof typeof IMAGE_SLOTS;
+
 export type BucketName = (typeof BUCKETS)[keyof typeof BUCKETS];
 
 const ALLOWED: Record<BucketName, { mime: string[]; maxBytes: number }> = {

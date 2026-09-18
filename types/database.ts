@@ -764,6 +764,7 @@ export interface Database {
           full_name: string | null;
           gender: Enums["gender"] | null;
           dob: string | null;
+          place_of_birth: string | null;
           height_cm: number | null;
           marital_status: Enums["marital_status"] | null;
           gotra: string | null;
@@ -782,6 +783,9 @@ export interface Database {
       };
     };
     Functions: {
+      admin_dashboard_stats: { Args: Record<string, never>; Returns: Json };
+      admin_recent_activity: { Args: { p_limit?: number | null }; Returns: Json };
+      admin_registration_list: { Args: { p_search?: string | null; p_status?: string | null; p_limit?: number | null; p_offset?: number | null }; Returns: Json };
       check_rate_limit: { Args: { p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean };
       cleanup_expired: { Args: Record<string, never>; Returns: Json };
       confirm_payment: { Args: { p_payment_id: string; p_gateway_payment_id: string }; Returns: Json };

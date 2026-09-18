@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { ShieldCheck, HeartHandshake, Lock, Sparkles } from "lucide-react";
 import { ButtonLink } from "@/components/ui/Button";
-import { getSiteContent } from "@/lib/services/content";
+import { getSiteContent, getSiteImages } from "@/lib/services/content";
+import { publicUrl, BUCKETS } from "@/lib/services/storage";
 
 /**
  * Home (PRD §4.2).
@@ -25,7 +26,13 @@ export async function generateMetadata(): Promise<Metadata> {
 const ICONS = [ShieldCheck, Lock, HeartHandshake, Sparkles];
 
 export default async function HomePage() {
-  const { hero, about, why_choose_us: why, cta } = await getSiteContent();
+  const [{ hero, about, why_choose_us: why, cta }, images] = await Promise.all([
+    getSiteContent(),
+    getSiteImages(),
+  ]);
+
+  const heroImage = images.find((image) => image.slot === "hero");
+  const heroUrl = publicUrl(BUCKETS.siteAssets, heroImage?.storage_path);
 
   return (
     <>
@@ -46,20 +53,32 @@ export default async function HomePage() {
           </div>
 
           {/*
-            Placeholder for the couple imagery in PRD §4.2. Once real licensed
-            photography is supplied it is uploaded to site-assets and rendered
-            from site_images, with no code change.
+            The couple imagery from PRD §4.2, uploaded through the admin CMS.
+            Until one is set, a placeholder panel says where it comes from.
+
+            A plain <img>: the CMS already resized and WebP-encoded it on
+            upload, so Vercel's optimiser would add a per-image cost for no gain.
           */}
           <div className="relative">
-            <div className="aspect-4/3 w-full rounded-card border border-primary-border bg-surface shadow-lift">
-              <div className="grid h-full place-items-center gap-3 p-8 text-center">
-                <HeartHandshake className="h-12 w-12 text-primary-border" aria-hidden />
-                <p className="text-sm text-muted">
-                  Couple photography goes here — upload it from
-                  <span className="whitespace-nowrap"> Admin → Website content</span>.
-                </p>
+            {heroUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={heroUrl}
+                alt={heroImage?.alt_text || ""}
+                fetchPriority="high"
+                className="aspect-4/3 w-full rounded-card border border-primary-border object-cover shadow-lift"
+              />
+            ) : (
+              <div className="aspect-4/3 w-full rounded-card border border-primary-border bg-surface shadow-lift">
+                <div className="grid h-full place-items-center gap-3 p-8 text-center">
+                  <HeartHandshake className="h-12 w-12 text-primary-border" aria-hidden />
+                  <p className="text-sm text-muted">
+                    Couple photography goes here — upload it from
+                    <span className="whitespace-nowrap"> Admin → Website content</span>.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>

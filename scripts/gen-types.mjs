@@ -170,9 +170,22 @@ for (const rel of relations.rows.filter((r) => r.kind === "v")) {
 }
 // Callable RPCs. Trigger functions are excluded: they return `trigger` and are
 // never invoked over PostgREST.
+// proargnames covers IN *and* OUT parameters, so a `RETURNS TABLE (...)`
+// function would otherwise report its result columns as arguments. proargmodes
+// distinguishes them: i = in, b = inout, v = variadic; o/t are outputs.
+// When proargmodes is NULL every parameter is IN.
 const functions = await db.query(`
   select p.proname as name,
-         coalesce(p.proargnames, array[]::text[]) as arg_names,
+         coalesce(
+           case
+             when p.proargmodes is null then p.proargnames
+             else array(
+               select name from unnest(p.proargnames, p.proargmodes) as u(name, mode)
+                where u.mode in ('i', 'b', 'v')
+             )
+           end,
+           array[]::text[]
+         ) as arg_names,
          array(select format_type(t, null) from unnest(p.proargtypes) as t) as arg_types,
          p.pronargdefaults as n_defaults,
          format_type(p.prorettype, null) as return_type

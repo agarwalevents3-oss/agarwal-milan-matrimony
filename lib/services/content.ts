@@ -12,6 +12,20 @@ import { createAnonClient } from "@/lib/supabase/anon";
 
 export const CONTENT_TAG = "site-content";
 
+/**
+ * Drops the cached public content after an admin edit.
+ *
+ * Next 16 requires a cache-life profile alongside the tag. "max" is the right
+ * choice here: the entries are tagged and long-lived by design, and this call
+ * is what makes an edit appear immediately rather than after the hourly
+ * revalidation window. Every admin write goes through this one helper so the
+ * profile is decided in a single place.
+ */
+export async function revalidateSiteContent() {
+  const { revalidateTag } = await import("next/cache");
+  revalidateTag(CONTENT_TAG, "max");
+}
+
 export interface HeroContent    { title: string; subtitle: string; ctaPrimary: string; ctaSecondary: string }
 export interface AboutContent   { title: string; body: string }
 export interface WhyUsContent   { title: string; items: { title: string; body: string }[] }

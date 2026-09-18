@@ -19,7 +19,8 @@
     "seed:admin": "node scripts/seed-admin.mjs",
     "db:push": "supabase db push",
     "db:diff": "supabase db diff",
-    "check": "npm run typecheck && npm run lint && npm run verify:schema && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run verify:schema && npm run test",
+    "check:all": "npm run check && npm run build && npm run verify:no-secrets && npm run test:e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

@@ -211,3 +211,82 @@ own OTP service owns verification.
 If a project refuses to enable the phone provider without SMS credentials,
 `lib/auth/identity.ts` switches `STRATEGY` to `"synthetic-email"` and nothing
 else changes: everything downstream keys off `auth.uid()`.
+
+---
+
+## 14. Profile search runs on the server, not in the browser
+
+The original plan put the search query in the browser to avoid a serverless
+invocation. Building it showed that reasoning was wrong.
+
+The authenticated layout already resolves the session on the server, so the page
+is being rendered there regardless. Adding the search to that same render costs
+one more round trip inside an invocation we are already paying for — while the
+client-side version would have paid for the render *and then* made the browser
+wait through a second waterfall (HTML → JS → query) before showing anything.
+Server-side is both cheaper and faster.
+
+What did not change is the rule the PRD cares about: filters stay in local React
+state until DONE, and DONE produces exactly one navigation and one query.
+Putting the filters in the URL is what makes that work — and it makes a search
+shareable and the back button correct as a bonus.
+
+---
+
+## 15. Partner preferences are shared; family details are not
+
+A verified member can see another verified member's partner preferences
+(migration 0009). Those are written specifically to be read by prospective
+matches, so sharing them is the whole point.
+
+`family_details` deliberately has no such policy. It contains parents' and
+siblings' names — third parties who never signed up for anything and cannot
+consent on their own behalf. They stay visible to their owner and the admin
+only.
+
+The PRD does not settle this either way; §8.2 says only "permitted profile
+information". This is where we drew the line and why.
+
+---
+
+## 16. Profile photos bypass Next.js image optimisation
+
+`components/ui/ProfilePhoto` renders a plain `<img>`, not `next/image`.
+
+The two renditions are already resized and WebP-encoded in the browser before
+upload (240px thumb, 900px full). Running them through Vercel's optimiser would
+add a per-image transformation cost — metered on every plan — for files that are
+already exactly the size they will be displayed at. They are served straight
+from Supabase's CDN with a one-year cache header instead.
+
+This is the other half of the storage decision in §3: compress once at upload,
+serve the same bytes forever.
+
+---
+
+## 17. The admin reads through its own session, not the service role
+
+`lib/services/admin.ts` queries with the admin's cookie session. The admin RLS
+policies already grant full visibility, so reaching for the service role would
+add nothing except a key that bypasses every policy.
+
+The practical benefit: if the admin role is ever revoked, those queries stop
+returning data on the very next request. With the service role they would keep
+working until someone noticed.
+
+The heavier reports (`admin_dashboard_stats`, `admin_recent_activity`,
+`admin_registration_list`) are `SECURITY DEFINER` because they aggregate across
+every member — so each one re-checks `is_admin()` internally before returning a
+single row. That is tested in `tests/db/rls.test.ts`.
+
+---
+
+## 18. Every admin document view is audit-logged
+
+`/api/admin/document-url` hands back a five-minute signed URL for one document,
+looked up by id — the browser never receives a storage path.
+
+Each request writes to `audit_log` with the document type and whose it was.
+Looking at somebody's Aadhaar is exactly the kind of action that should leave a
+trace, and a five-minute expiry means a link pasted into a chat stops working
+almost immediately.

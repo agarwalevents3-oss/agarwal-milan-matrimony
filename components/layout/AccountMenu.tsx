@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 export function AccountMenu({
   registrationId, verified,
 }: {
-  name: string; registrationId: string; verified: boolean;
+  registrationId: string; verified: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);

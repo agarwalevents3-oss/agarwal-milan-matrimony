@@ -177,10 +177,14 @@ revoke all on public.audit_log           from anon, authenticated;
 -- used to escape the profiles policy. It exists to pin the column list: a
 -- query against it structurally cannot select a document, a payment, an email
 -- or a phone number.
+-- Note on the column list: place_of_birth is included because it is ordinary
+-- matrimonial context. time_of_birth is NOT — combined with dob and place it
+-- forms a complete natal record, and it adds nothing to browsing. A member who
+-- wants to exchange horoscope details can do so after matching.
 create view public.verified_profiles
 with (security_invoker = true) as
 select
-  user_id, full_name, gender, dob, height_cm, marital_status,
+  user_id, full_name, gender, dob, place_of_birth, height_cm, marital_status,
   gotra, subcaste, highest_qualification, occupation, company_business,
   annual_income_inr, photo_path, photo_thumb_path, city, state, created_at
 from public.profiles
