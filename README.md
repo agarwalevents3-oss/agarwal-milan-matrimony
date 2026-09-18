@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Matrimonial Platform
 
-## Getting Started
+Implementation of `docs/Matrimonial_Website_PRD.docx` — a verified matrimonial
+service built on Next.js, Supabase and Vercel.
 
-First, run the development server:
+**Start here:** [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is
+not. [`docs/DECISIONS.md`](docs/DECISIONS.md) for why the architecture looks the
+way it does.
+
+---
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind v4 |
+| Database | Supabase Postgres, Row Level Security on every table |
+| Auth | Supabase Auth, native phone identity, our own OTP service |
+| Storage | Supabase Storage, four buckets |
+| Server logic | Next.js Route Handlers (Node runtime) |
+| Hosting | Vercel |
+| Tests | Vitest + PGlite (in-process Postgres), Playwright |
+
+---
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local        # fill in the Supabase values
+npm run check                     # typecheck, lint, schema, tests
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`npm run check` works with no Supabase project at all — the schema and all 76
+tests run against an in-process Postgres.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Connecting a Supabase project
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Create a project (region `ap-south-1` for Indian users).
+2. Copy the URL, anon key and service-role key into `.env.local`.
+3. Generate the three server secrets:
+   ```bash
+   openssl rand -base64 48   # REGISTRATION_TICKET_SECRET
+   openssl rand -base64 48   # OTP_HASH_SECRET
+   openssl rand -base64 32   # CRON_SECRET
+   ```
+4. Enable **Authentication → Sign In / Providers → Phone**. No SMS credentials
+   are required — verification is handled by our own OTP service. If the project
+   refuses without an SMS provider, see decision 13 in `docs/DECISIONS.md`.
+5. Apply the migrations:
+   ```bash
+   npx supabase link --project-ref <ref>
+   npm run db:push
+   ```
+6. Create the administrator:
+   ```bash
+   # set ADMIN_SEED_PHONE and ADMIN_SEED_PASSWORD in .env.local first
+   npm run seed:admin
+   ```
+   Then rotate `ADMIN_SEED_PASSWORD`.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Commands
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run check` | Typecheck + lint + schema + tests — run this before pushing |
+| `npm test` | All 76 tests |
+| `npm run test:db` | Security and business-rule tests only |
+| `npm run verify:schema` | Applies every migration to a throwaway Postgres |
+| `npm run verify:no-secrets` | Fails if a secret reached the client bundle |
+| `npm run gen:types` | Regenerates `types/database.ts` from the migrations |
+| `npm run db:push` | Applies migrations to the linked Supabase project |
+| `npm run seed:admin` | Creates the single administrator |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**After changing any migration, run `npm run gen:types`.** The types are
+introspected from the schema, so they cannot drift — but only if you regenerate.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## How this codebase is organised
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/
+  (public)/     Home, Contact — static + ISR, CMS-driven, ~free to serve
+  (auth)/       Login, the registration wizard
+  (app)/        Signed-in area: payment, status, dashboard
+  api/          Route Handlers — the serverless functions
+lib/
+  supabase/     client (browser) · server (cookies) · anon (cacheable) · admin (service role)
+  services/     otp · payment · storage · upload · content
+  validation/   Zod schemas shared by client and server
+  auth/         guards · identity adapter · status routing
+supabase/
+  migrations/   The schema. Applied by CI, never by hand in the dashboard.
+tests/
+  db/           RLS and business rules against a real Postgres
+  unit/         Pure logic
+```
+
+---
+
+## The security model in one paragraph
+
+The anon key ships to the browser by design; the database is directly reachable
+by anyone who opens devtools. What protects the data is **Row Level Security on
+all 18 tables**, plus triggers that enforce the registration state machine, keep
+Aadhaar immutable, and refuse to verify an unpaid registration. Route guards
+exist for user experience, not security. The service-role key is read in exactly
+one file (`lib/supabase/admin.ts`); a lint rule and a build-time bundle scan keep
+it that way. `tests/db/` proves the policies behave — **it is the suite to keep
+green above all others.**
+
+---
+
+## Deploying
+
+Vercel picks up `main` automatically once the repo is connected. Set the
+environment variables from `.env.example` in the Vercel project — **nothing
+secret may carry a `NEXT_PUBLIC_` prefix**; the build fails if one does.
+
+`vercel.json` schedules the nightly retention sweep, which purges expired OTP
+records, stale rate-limit buckets, old read notifications and abandoned drafts.
+
+CI applies migrations to production on push to `main`. It needs
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` and `SUPABASE_DB_PASSWORD` as
+repository secrets.

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Applies every migration to a real Postgres (PGlite) and asserts RLS is
+      # enabled everywhere. No Docker or Supabase project needed.
+      - name: Verify schema
+        run: npm run verify:schema
+
+      # The security gate: RLS policies, the status machine, Aadhaar immutability,
+      # duplicate interests and the single-match guarantee.
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-build-only
+          REGISTRATION_TICKET_SECRET: ci-placeholder-registration-ticket-secret
+          OTP_HASH_SECRET: ci-placeholder-otp-hash-secret
+          CRON_SECRET: ci-placeholder-cron-secret
+
+      # Fails if a server secret reached a browser bundle.
+      - name: Scan client bundle for secrets
+        run: npm run verify:no-secrets
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-build-only
+          REGISTRATION_TICKET_SECRET: ci-placeholder-registration-ticket-secret
+          OTP_HASH_SECRET: ci-placeholder-otp-hash-secret
+          CRON_SECRET: ci-placeholder-cron-secret
+
+  migrate:
+    # Migrations are applied from CI only, never by hand in the dashboard, so
+    # the files in supabase/migrations are always the truth about production.
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      - run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
