@@ -6,7 +6,7 @@ Read `docs/STATUS.md` first — it says what is built and what is not.
 ## Before you push
 
 ```bash
-npm run check    # typecheck + lint + schema verification + 76 tests
+npm run check    # typecheck + lint + schema verification + tests
 ```
 
 ## Rules that are not negotiable
