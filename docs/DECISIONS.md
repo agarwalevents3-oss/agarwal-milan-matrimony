@@ -201,16 +201,49 @@ class and two env vars — not the flow, and not any table.
 
 ---
 
-## 13. The phone-identity fallback
+## 13. Auth identity: synthetic email, not native phone (confirmed live, 2026-09-19)
 
-We use Supabase's native phone identity: `auth.users.phone` is the credential
-and `signInWithPassword({ phone, password })` needs no SMS provider, because our
-own OTP service owns verification.
+The plan's stated preference was Supabase's native phone identity —
+`auth.users.phone` as the credential, `signInWithPassword({ phone, password })`
+needing no SMS provider because our own OTP service owns verification.
 
-**This is unverified against a live Supabase project** — see `docs/STATUS.md`.
-If a project refuses to enable the phone provider without SMS credentials,
-`lib/auth/identity.ts` switches `STRATEGY` to `"synthetic-email"` and nothing
-else changes: everything downstream keys off `auth.uid()`.
+**Tested directly against the live project and it does not hold.** Creating a
+user with a phone identity via `admin.createUser` works fine. But actually
+signing in — `signInWithPassword({ phone, password })` — is rejected with
+`phone_provider_disabled`, because Supabase's Phone provider is a project-level
+toggle that is off by default. Attempting to enable it in the dashboard (see
+screenshot in session, 2026-09-19) shows why: Supabase will not save the toggle
+without a configured SMS provider (Twilio, MessageBird, ...) and real
+credentials for it — even though that SMS provider is never actually used,
+since our OTP service verifies the number before Supabase is ever involved.
+
+Rather than requiring a Twilio account to be set up just to satisfy a toggle
+neither of us wants to depend on, we switched to the synthetic-email identity:
+`{mobile}@phone.internal` — a non-deliverable address — is used as the
+Supabase Auth identity instead. Verified end-to-end against the live project:
+create via `admin.createUser({ email, email_confirm: true })`, sign in via
+`signInWithPassword({ email, password })`, both succeed.
+
+This is controlled by `AUTH_IDENTITY_STRATEGY` (`lib/env.ts`), not a hardcoded
+constant, because **two** places need to agree on it: `lib/auth/identity.ts`
+(the Next.js runtime) and `scripts/seed-admin.mjs` (a plain Node script that
+cannot import that file — no bundler, and the file is wrapped in
+`"server-only"`). One environment variable is the actual seam; everything
+downstream still keys off `auth.uid()`, never off how the identity was spelled.
+
+**What this gives up:** the plan's future path of a real SMS provider wired in
+through a Supabase Send-SMS Auth Hook, which needs the Phone provider enabled.
+That path is closed while `AUTH_IDENTITY_STRATEGY=synthetic-email`. It is not a
+significant loss — `lib/services/otp` already owns sending and verifying codes
+at the application layer regardless of which identity strategy is active, so a
+real SMS provider (MSG91, Twilio, ...) plugs in there exactly as originally
+designed. Only the *login credential's shape* changed, not the OTP flow.
+
+**To switch back**, if a Twilio (or similar) account is set up later: enable
+the Phone provider in the Supabase dashboard, set
+`AUTH_IDENTITY_STRATEGY=phone`, and existing synthetic-email accounts would
+need a migration (Supabase has no built-in way to change a user's primary
+identity type after creation) — plan for that rather than assuming it is free.
 
 ---
 

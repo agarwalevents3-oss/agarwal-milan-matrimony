@@ -3,52 +3,77 @@
 Written for the team picking this up. Honest account of what works, what is
 stubbed, and what has not been verified.
 
-Last updated: 2026-09-18.
+Last updated: 2026-09-19.
 
 ---
 
 ## Summary
 
-**Every feature in the PRD is built.** The complete flow works end to end:
-register → mock OTP → payment → admin verification → search → interest →
-mutual match → notifications, plus the full admin panel and CMS.
+**Every feature in the PRD is built, and the schema is now live.** The
+project is connected to a real Supabase project (`hwxxblpvpdekaxfursfz`); all 9
+migrations are applied and verified against it directly — not just against the
+local PGlite harness.
 
 **169 automated tests pass** (88 unit/database, 81 end-to-end), the schema
 applies cleanly to a real Postgres, and the production build is green.
 
 ---
 
-## The one caveat that matters
+## Live database: connected and verified (2026-09-19)
 
-**Nothing here has been run against a live Supabase project.** No Supabase
-credentials existed during this build, and Docker was unavailable, so the local
-Supabase stack could not be started either.
+The Supabase CLI could not be linked (`supabase login` needs an interactive
+browser flow, unavailable here, and no personal access token was supplied), so
+migrations were applied directly against the Postgres connection string using
+`scripts/push-migrations.mjs` — a new, permanent script that tracks applied
+versions in the same `supabase_migrations.schema_migrations` table the CLI
+uses, so `supabase db push` will recognise them as already applied once the CLI
+is authenticated (in CI, for instance) rather than failing on existing objects.
 
-What was done instead:
+**Confirmed directly against the live project, not assumed:**
 
-- every migration is applied to a **real Postgres** (PGlite, Postgres compiled
-  to WASM) on every test run, with Supabase's `auth` and `storage` schemas
-  stubbed to match their real shapes. This found four real bugs during the
-  build.
-- the app is started and driven for real in the end-to-end suite, which covers
-  the public site, access control, validation and the API contract.
+| Item | Result |
+|---|---|
+| All 9 migrations | Applied cleanly, zero errors |
+| Tables / RLS | 18 tables, all with RLS enabled — exact match with local verification |
+| Policies / functions | 34 policies, 25 functions — exact match |
+| Triggers | 14 application triggers present (matches local); +8 more are Supabase's own storage/realtime infrastructure, not ours |
+| Storage buckets | All 4 created with the correct public/private flags and size limits |
+| Realtime | `notifications` is live on `supabase_realtime` — the unread badge should update without a refresh |
+| Phone auth | **Does not work as planned** — see below |
 
-That is genuine verification, but it is not a substitute for a first run against
-the hosted product. Expect to spend a session on these when you connect one:
+### The phone-auth finding
 
-| Risk | Why | If it bites |
-|---|---|---|
-| Phone provider may need SMS credentials to enable | Supabase's dashboard sometimes requires an SMS provider before phone auth can be turned on | Switch `STRATEGY` in `lib/auth/identity.ts` to `"synthetic-email"`. That file is the only thing that changes. |
-| Storage `list()` metadata shape | `verifyUploadedObject()` reads `size` and `mimetype` from `storage.list()` | Adjust the field names in `lib/services/storage.ts` |
-| `app_metadata.role` claim in the JWT | `is_admin()` reads it; the shape is stable but unverified here | Confirm with a real token, then adjust the path in migration 0003 |
-| Realtime publication | Migration 0009 adds `notifications` to `supabase_realtime`, guarded so it no-ops locally | Confirm the unread badge updates live; falls back to per-render counts if not |
-| `revalidateTag` cache invalidation | Next 16 changed the signature; admin edits call it through one helper | If a content edit does not appear immediately, adjust `revalidateSiteContent()` in `lib/services/content.ts` |
+The plan called for Supabase's native phone identity. Tested directly:
+`admin.createUser` with a phone identity succeeds, but the actual login call —
+`signInWithPassword({ phone, password })` — is rejected with
+`phone_provider_disabled`. Enabling the toggle in the dashboard turns out to
+require real Twilio (or another SMS provider's) credentials before Supabase
+will even save the setting, despite our own OTP service being what actually
+verifies the number.
 
-**Everything authenticated is visually unverified.** The dashboard, profile
-pages, interests, matches, notifications and the whole admin panel compile,
-typecheck and are covered by access-control tests — but no one has looked at
-them rendered with real data, because that needs a session. Budget time to walk
-through them once a project is connected.
+Since setting up Twilio is explicitly deferred, we switched to the
+**synthetic-email identity** (`{mobile}@phone.internal`) via a new
+`AUTH_IDENTITY_STRATEGY` environment variable. **This was also verified
+end-to-end against the live project**: created a user, signed in, got a valid
+session back, then deleted the test user. Full account of the decision and the
+trade-off (a future real-SMS integration goes through the application-layer OTP
+service, not a Supabase Auth Hook) is in `docs/DECISIONS.md` §13.
+
+### Still open — not yet done against the live project
+
+| Item | Why it matters |
+|---|---|
+| **Admin account not yet seeded** | `npm run seed:admin` needs `ADMIN_SEED_PHONE` / `ADMIN_SEED_PASSWORD`, which have not been provided. Nothing in `/admin` can be reached until this runs. |
+| Storage `list()` metadata shape | `verifyUploadedObject()` reads `size` and `mimetype` back from `storage.list()` after a real upload — not yet exercised through the app itself |
+| `app_metadata.role` claim in a real session JWT | `is_admin()` reads it; the shape is standard but has not been confirmed via an actual login through the app |
+| `revalidateTag` cache invalidation | Next 16 changed the signature; admin content edits call it through one helper (`revalidateSiteContent`) — not yet exercised with a real edit |
+| **Not deployed to Vercel yet** | The app has only been run locally against the live database |
+
+**Everything authenticated is still visually unverified.** The dashboard,
+profile pages, interests, matches, notifications and the whole admin panel
+compile, typecheck and are covered by access-control tests — but no one has
+logged in and looked at them rendered with real data yet, because that needs
+the admin account to exist first.
 
 ---
 

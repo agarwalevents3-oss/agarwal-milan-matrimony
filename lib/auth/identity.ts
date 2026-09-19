@@ -1,25 +1,40 @@
 import "server-only";
 
+import { env } from "@/lib/env";
 import { mobileSchema, toE164 } from "@/lib/validation/common";
 
 /**
  * The auth-identity adapter.
  *
- * We use Supabase's NATIVE phone identity: auth.users.phone is the login
- * credential and signInWithPassword({ phone, password }) needs no SMS provider,
- * because our own OTP service owns verification (see lib/services/otp).
+ * Two supported strategies, selected by AUTH_IDENTITY_STRATEGY (see lib/env.ts):
  *
- * This module exists as a seam. If a Supabase project cannot enable the phone
- * provider without SMS credentials, switching to a synthetic-email identity is
- * a change to THIS FILE ONLY — everything downstream keys off auth.uid(), not
- * off how the identity was spelled. See docs/DECISIONS.md.
+ *   "phone"           auth.users.phone is the login credential, so
+ *                      signInWithPassword({ phone, password }) works natively.
+ *                      Needs the Supabase Phone provider enabled — which, on a
+ *                      real project, needs a configured SMS provider (Twilio,
+ *                      MessageBird, ...) before Supabase will save the toggle
+ *                      at all, EVEN THOUGH our own OTP service is what
+ *                      actually verifies the number (see lib/services/otp).
+ *                      Confirmed against a live project 2026-09-19.
+ *
+ *   "synthetic-email" a non-deliverable {mobile}@phone.internal address is
+ *                      used as the Auth identity instead. No dashboard
+ *                      configuration needed at all. This is the default,
+ *                      because it lets a real SMS provider be deferred
+ *                      indefinitely without blocking login.
+ *
+ * Everything downstream keys off auth.uid(), never off how the identity was
+ * spelled, so this is genuinely just a seam — see docs/DECISIONS.md.
+ *
+ * scripts/seed-admin.mjs branches on the SAME env var, because it runs outside
+ * the Next.js runtime and cannot import this file.
  */
 
 export type AuthIdentity =
   | { kind: "phone"; phone: string }
   | { kind: "email"; email: string };
 
-const STRATEGY: "phone" | "synthetic-email" = "phone";
+const STRATEGY = env.auth.identityStrategy;
 
 /** Normalises whatever the user typed into the canonical E.164 form we store. */
 export function normaliseMobile(input: string): string {

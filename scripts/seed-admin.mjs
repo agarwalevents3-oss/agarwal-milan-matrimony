@@ -7,6 +7,12 @@
  * The role is written to BOTH app_metadata (which RLS reads from the JWT) and
  * public.users.role (which the server guards re-check). Both must agree for
  * admin access to work, which means a tampered token alone is not enough.
+ *
+ * Branches on AUTH_IDENTITY_STRATEGY exactly as lib/auth/identity.ts does.
+ * This script cannot import that file — it runs as a plain Node script with
+ * no bundler, and the file is wrapped in "server-only" — so the env var is
+ * what keeps the two in agreement rather than a shared constant. See
+ * docs/DECISIONS.md.
  */
 import { createClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
@@ -17,6 +23,8 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const phone = process.env.ADMIN_SEED_PHONE;
 const password = process.env.ADMIN_SEED_PASSWORD;
+const strategy = process.env.AUTH_IDENTITY_STRATEGY || "phone";
+const syntheticEmail = `${phone?.replace("+", "") ?? ""}@phone.internal`;
 
 const missing = Object.entries({
   NEXT_PUBLIC_SUPABASE_URL: url,
@@ -48,22 +56,20 @@ if (existing) {
   process.exit(0);
 }
 
-const { data: created, error: authError } = await db.auth.admin.createUser({
-  phone,
-  password,
-  phone_confirm: true,
-  app_metadata: { role: "admin" },
-});
+const { data: created, error: authError } = await db.auth.admin.createUser(
+  strategy === "synthetic-email"
+    ? { email: syntheticEmail, password, email_confirm: true, app_metadata: { role: "admin" } }
+    : { phone, password, phone_confirm: true, app_metadata: { role: "admin" } },
+);
 
 if (authError) {
   console.error("Could not create the auth user:", authError.message);
   if (/phone|sms/i.test(authError.message)) {
     console.error(
-      "\nThis usually means the Phone provider is not enabled on the Supabase project.\n" +
-      "Enable Authentication → Sign In / Providers → Phone. No SMS credentials are needed:\n" +
-      "our own OTP service handles verification (see lib/services/otp).\n" +
-      "If the project refuses without an SMS provider, switch STRATEGY in\n" +
-      "lib/auth/identity.ts to 'synthetic-email' — that file is the only thing that changes.",
+      "\nSupabase's Phone provider needs a configured SMS provider (Twilio, etc.) before it\n" +
+      "can be enabled — even though our own OTP service is what actually verifies numbers.\n" +
+      "Set AUTH_IDENTITY_STRATEGY=synthetic-email in .env.local to avoid needing it at all,\n" +
+      "then re-run this script.",
     );
   }
   process.exit(1);
@@ -74,6 +80,8 @@ const userId = created.user.id;
 const { error: dbError } = await db.from("users").insert({
   id: userId,
   mobile: phone,
+  // public.users.email is ordinary profile data, unrelated to the synthetic
+  // address (if any) used as the Auth identity above.
   email: `admin@${new URL(url).hostname.split(".")[0]}.local`,
   role: "admin",
 });

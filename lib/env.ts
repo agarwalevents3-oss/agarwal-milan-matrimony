@@ -56,6 +56,25 @@ export const env = {
   site: {
     url: optional("NEXT_PUBLIC_SITE_URL", "http://localhost:3000"),
   },
+  auth: {
+    /**
+     * "phone"           — auth.users.phone is the login credential (needs the
+     *                      Supabase Phone provider enabled, which itself
+     *                      requires a configured SMS provider — Supabase will
+     *                      not save the toggle without one, even though our
+     *                      own OTP service is what actually verifies numbers).
+     * "synthetic-email" — a non-deliverable {mobile}@phone.internal address is
+     *                      used as the Supabase Auth identity instead. No
+     *                      dashboard configuration needed. This is what lets
+     *                      us defer setting up a real SMS provider.
+     *
+     * Read by both lib/auth/identity.ts (the Next.js runtime) and
+     * scripts/seed-admin.mjs (a plain Node script with no bundler), so this
+     * env var — not a hardcoded constant in either file — is the single
+     * source of truth. See docs/DECISIONS.md.
+     */
+    identityStrategy: optional("AUTH_IDENTITY_STRATEGY", "phone") as "phone" | "synthetic-email",
+  },
 } as const;
 
 export const isMockOtp = () => env.otp.mode === "mock";

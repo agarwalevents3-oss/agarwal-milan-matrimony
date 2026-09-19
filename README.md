@@ -46,14 +46,25 @@ production build, the secret scan and the end-to-end suite.
    openssl rand -base64 48   # OTP_HASH_SECRET
    openssl rand -base64 32   # CRON_SECRET
    ```
-4. Enable **Authentication → Sign In / Providers → Phone**. No SMS credentials
-   are required — verification is handled by our own OTP service. If the project
-   refuses without an SMS provider, see decision 13 in `docs/DECISIONS.md`.
-5. Apply the migrations:
+4. Auth identity: by default `AUTH_IDENTITY_STRATEGY=synthetic-email`, which
+   needs no dashboard configuration. Supabase's native Phone provider requires
+   a configured SMS provider (Twilio, etc.) before it can even be enabled —
+   confirmed against a live project — so it is not the default. See decision 13
+   in `docs/DECISIONS.md` if you want to switch once a provider is set up.
+5. Apply the migrations. If you can run `supabase login` interactively:
    ```bash
    npx supabase link --project-ref <ref>
    npm run db:push
    ```
+   Otherwise, apply them directly with the database connection string from
+   Supabase → Settings → Database (no CLI login needed):
+   ```bash
+   SUPABASE_DB_URL="postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres" \
+     npm run db:push:direct
+   ```
+   Either way, applied versions are tracked in
+   `supabase_migrations.schema_migrations`, so re-running is safe and the two
+   methods stay compatible with each other.
 6. Create the administrator:
    ```bash
    # set ADMIN_SEED_PHONE and ADMIN_SEED_PASSWORD in .env.local first
@@ -76,7 +87,8 @@ production build, the secret scan and the end-to-end suite.
 | `npm run verify:schema` | Applies every migration to a throwaway Postgres |
 | `npm run verify:no-secrets` | Fails if a secret reached the client bundle |
 | `npm run gen:types` | Regenerates `types/database.ts` from the migrations |
-| `npm run db:push` | Applies migrations to the linked Supabase project |
+| `npm run db:push` | Applies migrations via the Supabase CLI (needs `supabase login`) |
+| `npm run db:push:direct` | Applies migrations directly via `SUPABASE_DB_URL`, no CLI login needed |
 | `npm run seed:admin` | Creates the single administrator |
 
 **After changing any migration, run `npm run gen:types`.** The types are
