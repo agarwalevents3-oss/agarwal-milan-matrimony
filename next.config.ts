@@ -10,10 +10,19 @@ import type { NextConfig } from "next";
 const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseWs = supabaseOrigin.replace(/^https/, "wss");
 
+// React's Fast Refresh / dev-mode error overlay uses eval() to reconstruct
+// stack traces across the dev server boundary — harmless and dev-only. "React
+// will never use eval() in production mode" per its own warning, so
+// 'unsafe-eval' is added ONLY outside production rather than loosened for
+// everyone.
+const scriptSrc = process.env.NODE_ENV === "production"
+  ? "script-src 'self' 'unsafe-inline'"
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+
 const csp = [
   "default-src 'self'",
   // Next injects inline bootstrap scripts; 'unsafe-inline' is required for them.
-  "script-src 'self' 'unsafe-inline'",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${supabaseOrigin}`,
   "font-src 'self' data:",
@@ -25,6 +34,10 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Next 16 otherwise appends an "agent rules" block to AGENTS.md on every
+  // `next dev` run, which would fight our own hand-written conventions there.
+  agentRules: false,
+
   async headers() {
     return [
       {

@@ -2,11 +2,17 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { mobileSchema, toE164 } from "@/lib/validation/common";
+import * as core from "./identity-core";
+
+export type { AuthIdentity } from "./identity-core";
 
 /**
- * The auth-identity adapter.
+ * Server-side auth-identity adapter.
  *
- * Two supported strategies, selected by AUTH_IDENTITY_STRATEGY (see lib/env.ts):
+ * Strategy is selected by NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY (see lib/env.ts —
+ * public despite the name, because it is a config fact, not a credential; both
+ * this file and lib/auth/identity-client.ts must read the identical value, so
+ * it has to be visible to the browser bundle too).
  *
  *   "phone"           auth.users.phone is the login credential, so
  *                      signInWithPassword({ phone, password }) works natively.
@@ -24,15 +30,14 @@ import { mobileSchema, toE164 } from "@/lib/validation/common";
  *                      indefinitely without blocking login.
  *
  * Everything downstream keys off auth.uid(), never off how the identity was
- * spelled, so this is genuinely just a seam — see docs/DECISIONS.md.
+ * spelled, so this is genuinely just a seam — see docs/DECISIONS.md §13.
  *
- * scripts/seed-admin.mjs branches on the SAME env var, because it runs outside
- * the Next.js runtime and cannot import this file.
+ * The actual branching lives in identity-core.ts, shared with
+ * lib/auth/identity-client.ts (the browser's login form) and
+ * scripts/seed-admin.mjs (a plain Node script that can import neither, since
+ * it runs outside the Next.js runtime — it duplicates the branching, kept in
+ * sync by reading the same env var).
  */
-
-export type AuthIdentity =
-  | { kind: "phone"; phone: string }
-  | { kind: "email"; email: string };
 
 const STRATEGY = env.auth.identityStrategy;
 
@@ -41,33 +46,20 @@ export function normaliseMobile(input: string): string {
   return toE164(mobileSchema.parse(input));
 }
 
-/** The credential object handed to Supabase Auth for sign-in and creation. */
-export function identityFor(mobileE164: string): AuthIdentity {
-  if (STRATEGY === "phone") {
-    return { kind: "phone", phone: mobileE164 };
-  }
-  // Fallback: a synthetic, non-deliverable address derived from the number.
-  return { kind: "email", email: `${mobileE164.replace("+", "")}@phone.internal` };
+export function identityFor(mobileE164: string) {
+  return core.identityFor(mobileE164, STRATEGY);
 }
 
 /** Credentials for supabase.auth.signInWithPassword(). */
 export function signInCredentials(mobileE164: string, password: string) {
-  const identity = identityFor(mobileE164);
-  return identity.kind === "phone"
-    ? { phone: identity.phone, password }
-    : { email: identity.email, password };
+  return core.signInCredentials(mobileE164, password, STRATEGY);
 }
 
 /** Attributes for supabase.auth.admin.createUser(). */
-export function createUserAttributes(mobileE164: string, password: string, role: "user" | "admin" = "user") {
-  const identity = identityFor(mobileE164);
-  const base = {
-    password,
-    // Our OTP service already proved ownership, so the identity is confirmed
-    // at creation; no Supabase-side SMS is ever sent.
-    app_metadata: { role },
-  };
-  return identity.kind === "phone"
-    ? { ...base, phone: identity.phone, phone_confirm: true }
-    : { ...base, email: identity.email, email_confirm: true };
+export function createUserAttributes(
+  mobileE164: string,
+  password: string,
+  role: "user" | "admin" = "user",
+) {
+  return core.createUserAttributes(mobileE164, password, STRATEGY, role);
 }

@@ -224,16 +224,33 @@ Supabase Auth identity instead. Verified end-to-end against the live project:
 create via `admin.createUser({ email, email_confirm: true })`, sign in via
 `signInWithPassword({ email, password })`, both succeed.
 
-This is controlled by `AUTH_IDENTITY_STRATEGY` (`lib/env.ts`), not a hardcoded
-constant, because **two** places need to agree on it: `lib/auth/identity.ts`
-(the Next.js runtime) and `scripts/seed-admin.mjs` (a plain Node script that
-cannot import that file — no bundler, and the file is wrapped in
-`"server-only"`). One environment variable is the actual seam; everything
+This is controlled by `NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY` (`lib/env.ts`), not a
+hardcoded constant, because **three** places need to agree on it and none of
+them can share the obvious one:
+- `lib/auth/identity.ts` — server-side, wrapped in `"server-only"`
+- `lib/auth/identity-client.ts` — the browser's login form, which signs a
+  returning member in directly against Supabase Auth with no Route Handler in
+  between, so it needs the identical strategy the server used at creation
+- `scripts/seed-admin.mjs` — a plain Node script outside the Next.js runtime,
+  which cannot import either of the above
+
+All three read the same env var and call into the same pure branching logic in
+`lib/auth/identity-core.ts` (no env access, no server/client guard), so the
+three cannot silently disagree with each other. The var is `NEXT_PUBLIC_`-
+prefixed specifically so the browser copy can read it — it is a config fact,
+not a credential, so shipping it to the client costs nothing. Everything
 downstream still keys off `auth.uid()`, never off how the identity was spelled.
+
+**This split caught a real bug during the live-project verification session:**
+the login form originally hardcoded `signInWithPassword({ phone, ... })`
+directly rather than going through any seam at all, so switching the strategy
+to `synthetic-email` broke login (422 `phone_provider_disabled`) while account
+*creation* kept working — because only the registration route used the
+identity module. The fix was this three-way split, not a one-line patch.
 
 **What this gives up:** the plan's future path of a real SMS provider wired in
 through a Supabase Send-SMS Auth Hook, which needs the Phone provider enabled.
-That path is closed while `AUTH_IDENTITY_STRATEGY=synthetic-email`. It is not a
+That path is closed while `NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY=synthetic-email`. It is not a
 significant loss — `lib/services/otp` already owns sending and verifying codes
 at the application layer regardless of which identity strategy is active, so a
 real SMS provider (MSG91, Twilio, ...) plugs in there exactly as originally
@@ -241,7 +258,7 @@ designed. Only the *login credential's shape* changed, not the OTP flow.
 
 **To switch back**, if a Twilio (or similar) account is set up later: enable
 the Phone provider in the Supabase dashboard, set
-`AUTH_IDENTITY_STRATEGY=phone`, and existing synthetic-email accounts would
+`NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY=phone`, and existing synthetic-email accounts would
 need a migration (Supabase has no built-in way to change a user's primary
 identity type after creation) — plan for that rather than assuming it is free.
 

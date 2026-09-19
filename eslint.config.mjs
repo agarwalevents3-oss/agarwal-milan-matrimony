@@ -27,6 +27,7 @@ const eslintConfig = defineConfig([
       // These read only NEXT_PUBLIC_* values, which ship to the browser anyway.
       "lib/supabase/client.ts", "lib/supabase/server.ts", "lib/supabase/anon.ts",
       "lib/supabase/middleware.ts", "lib/services/upload.ts", "lib/services/storage.ts",
+      "lib/auth/identity-client.ts",
     ],
     rules: {
       "no-restricted-properties": [

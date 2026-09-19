@@ -68,12 +68,15 @@ export const env = {
      *                      dashboard configuration needed. This is what lets
      *                      us defer setting up a real SMS provider.
      *
-     * Read by both lib/auth/identity.ts (the Next.js runtime) and
-     * scripts/seed-admin.mjs (a plain Node script with no bundler), so this
-     * env var — not a hardcoded constant in either file — is the single
-     * source of truth. See docs/DECISIONS.md.
+     * NEXT_PUBLIC_-prefixed and read directly (not just through this file)
+     * by lib/auth/identity-client.ts, because the browser's login form needs
+     * to agree with the server on how an account's identity was shaped —
+     * this value is a config fact, not a credential, so shipping it to the
+     * client is fine. scripts/seed-admin.mjs reads the same var directly too,
+     * since it runs outside the Next.js runtime and cannot import either
+     * module. One env var is the actual seam; see docs/DECISIONS.md §13.
      */
-    identityStrategy: optional("AUTH_IDENTITY_STRATEGY", "phone") as "phone" | "synthetic-email",
+    identityStrategy: optional("NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY", "phone") as "phone" | "synthetic-email",
   },
 } as const;
 

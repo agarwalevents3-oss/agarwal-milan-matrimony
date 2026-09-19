@@ -8,7 +8,7 @@
  * public.users.role (which the server guards re-check). Both must agree for
  * admin access to work, which means a tampered token alone is not enough.
  *
- * Branches on AUTH_IDENTITY_STRATEGY exactly as lib/auth/identity.ts does.
+ * Branches on NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY exactly as lib/auth/identity.ts does.
  * This script cannot import that file — it runs as a plain Node script with
  * no bundler, and the file is wrapped in "server-only" — so the env var is
  * what keeps the two in agreement rather than a shared constant. See
@@ -23,7 +23,7 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const phone = process.env.ADMIN_SEED_PHONE;
 const password = process.env.ADMIN_SEED_PASSWORD;
-const strategy = process.env.AUTH_IDENTITY_STRATEGY || "phone";
+const strategy = process.env.NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY || "phone";
 const syntheticEmail = `${phone?.replace("+", "") ?? ""}@phone.internal`;
 
 const missing = Object.entries({
@@ -68,7 +68,7 @@ if (authError) {
     console.error(
       "\nSupabase's Phone provider needs a configured SMS provider (Twilio, etc.) before it\n" +
       "can be enabled — even though our own OTP service is what actually verifies numbers.\n" +
-      "Set AUTH_IDENTITY_STRATEGY=synthetic-email in .env.local to avoid needing it at all,\n" +
+      "Set NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY=synthetic-email in .env.local to avoid needing it at all,\n" +
       "then re-run this script.",
     );
   }

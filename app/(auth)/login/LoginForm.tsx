@@ -8,16 +8,22 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import { mobileSchema, toE164 } from "@/lib/validation/common";
+import { clientSignInCredentials } from "@/lib/auth/identity-client";
 import { Field, Input } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 
 /**
- * Login (PRD §7.1): mobile number + password. Email login is not offered,
- * because the mobile number IS the auth identity (lib/auth/identity.ts).
+ * Login (PRD §7.1): mobile number + password. Email login is not offered as a
+ * distinct option — the member only ever types their mobile number, even
+ * though it may be translated to a synthetic email under the hood before
+ * reaching Supabase Auth (lib/auth/identity-client.ts).
  *
  * Sign-in happens client-side against Supabase Auth, which sets the session
- * cookie our proxy and server guards then read.
+ * cookie our proxy and server guards then read. This is the one place outside
+ * lib/auth/identity.ts that constructs sign-in credentials, so it goes through
+ * the CLIENT identity adapter rather than hardcoding a shape — the account may
+ * have been created under either strategy.
  */
 
 const schema = z.object({
@@ -41,10 +47,9 @@ export function LoginForm() {
     setFormError(null);
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
-      phone: toE164(values.mobile),
-      password: values.password,
-    });
+    const { error } = await supabase.auth.signInWithPassword(
+      clientSignInCredentials(toE164(values.mobile), values.password),
+    );
 
     if (error) {
       // Never distinguish "no such account" from "wrong password" — that would

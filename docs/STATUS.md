@@ -53,27 +53,48 @@ verifies the number.
 
 Since setting up Twilio is explicitly deferred, we switched to the
 **synthetic-email identity** (`{mobile}@phone.internal`) via a new
-`AUTH_IDENTITY_STRATEGY` environment variable. **This was also verified
+`NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY` environment variable. **This was also verified
 end-to-end against the live project**: created a user, signed in, got a valid
 session back, then deleted the test user. Full account of the decision and the
 trade-off (a future real-SMS integration goes through the application-layer OTP
 service, not a Supabase Auth Hook) is in `docs/DECISIONS.md` §13.
 
+## Admin account seeded and logged in for real (2026-09-19)
+
+`npm run seed:admin` ran against the live project. Verified directly in
+Postgres afterward: `public.users.role = 'admin'` and
+`auth.users.raw_app_meta_data.role = 'admin'` both agree, matching what
+`requireAdmin()` and the `is_admin()` RLS helper each check.
+
+**Then actually logged in through the running app** (`npm run dev` against the
+live database, driven with a real browser) and visually confirmed:
+
+- `/admin` dashboard renders all eleven metrics correctly at zero
+- `/admin/faqs` shows all 6 seeded FAQs from migration 0007, editable
+- `/admin/registrations` shows the correct empty state
+
+This found and fixed three real bugs that no amount of local testing without a
+live login could have caught:
+
+| Bug | Fix |
+|---|---|
+| **Login was broken for the synthetic-email strategy.** `LoginForm.tsx` hardcoded `signInWithPassword({ phone, ... })` directly, bypassing the identity seam entirely — only account *creation* went through it. Switching strategies broke every login with `phone_provider_disabled` while registration kept working. | Split `lib/auth/identity.ts` into a pure `identity-core.ts` (no env, no runtime guard) plus two thin wrappers: the existing server one, and a new `lib/auth/identity-client.ts` for the browser. `LoginForm` now goes through the same seam as the server. See `docs/DECISIONS.md` §13. |
+| **An admin login redirected into the member registration wizard.** Login always sent everyone to `/dashboard`; a page built for members read the admin's (nonexistent) registration status as `DRAFT` and redirected to `/register`. | `lib/supabase/middleware.ts` now redirects an admin away from member-area routes to `/admin`, symmetric with the existing redirect that keeps non-admins out of `/admin`. |
+| The CSP blocked `eval()`, which React's dev-mode Fast Refresh needs (harmless — "React will never use eval() in production" per its own warning) | `script-src` includes `'unsafe-eval'` only when `NODE_ENV !== "production"`. |
+
 ### Still open — not yet done against the live project
 
 | Item | Why it matters |
 |---|---|
-| **Admin account not yet seeded** | `npm run seed:admin` needs `ADMIN_SEED_PHONE` / `ADMIN_SEED_PASSWORD`, which have not been provided. Nothing in `/admin` can be reached until this runs. |
-| Storage `list()` metadata shape | `verifyUploadedObject()` reads `size` and `mimetype` back from `storage.list()` after a real upload — not yet exercised through the app itself |
-| `app_metadata.role` claim in a real session JWT | `is_admin()` reads it; the shape is standard but has not been confirmed via an actual login through the app |
-| `revalidateTag` cache invalidation | Next 16 changed the signature; admin content edits call it through one helper (`revalidateSiteContent`) — not yet exercised with a real edit |
-| **Not deployed to Vercel yet** | The app has only been run locally against the live database |
+| Storage `list()` metadata shape | `verifyUploadedObject()` reads `size` and `mimetype` back from `storage.list()` after a real upload — the app has been logged into, but no file has been uploaded through it yet |
+| `revalidateTag` cache invalidation | Admin content edits call it through one helper (`revalidateSiteContent`) — not yet exercised with a real edit through the UI |
+| **No member has registered yet** | The registration → payment → verification → search → interest → match path is written and unit/E2E-tested, but not yet walked end-to-end against the live database with a real browser |
+| **Not deployed to Vercel yet** | The app has only been run locally against the live database, on the user's explicit instruction to finish local testing first |
 
-**Everything authenticated is still visually unverified.** The dashboard,
-profile pages, interests, matches, notifications and the whole admin panel
-compile, typecheck and are covered by access-control tests — but no one has
-logged in and looked at them rendered with real data yet, because that needs
-the admin account to exist first.
+**Member-facing authenticated pages are still visually unverified** — dashboard
+search, profile detail, interests, matches, notifications. The admin panel
+render is now confirmed; a member account has not been created through the
+running app yet to check the rest.
 
 ---
 

@@ -46,7 +46,7 @@ production build, the secret scan and the end-to-end suite.
    openssl rand -base64 48   # OTP_HASH_SECRET
    openssl rand -base64 32   # CRON_SECRET
    ```
-4. Auth identity: by default `AUTH_IDENTITY_STRATEGY=synthetic-email`, which
+4. Auth identity: by default `NEXT_PUBLIC_AUTH_IDENTITY_STRATEGY=synthetic-email`, which
    needs no dashboard configuration. Supabase's native Phone provider requires
    a configured SMS provider (Twilio, etc.) before it can even be enabled —
    confirmed against a live project — so it is not the default. See decision 13
