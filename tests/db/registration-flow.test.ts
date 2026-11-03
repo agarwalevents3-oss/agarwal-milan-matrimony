@@ -156,6 +156,66 @@ describe("Registration → payment → verification", () => {
     expect(notif.rows).toHaveLength(1);
   });
 
+  it("moves the registration to PAYMENT_FAILED when a payment fails (migration 0010)", async () => {
+    const auth = await db.query<{ id: string }>(
+      `insert into auth.users (phone, email) values ('+919812345680','fail@example.com') returning id`);
+    const failUser = auth.rows[0].id;
+
+    await db.query(
+      `select public.create_draft_registration($1,'+919812345680','fail@example.com','Fail Case','MALE')`,
+      [failUser]);
+    await db.query(
+      `select public.submit_registration($1, $2::jsonb, '203.0.113.9'::inet)`,
+      [failUser, JSON.stringify({ ...documents, aadhaarConsent: true })]);
+
+    const reg = await db.query<{ id: string }>(
+      `select id from public.registrations where user_id = $1`, [failUser]);
+    const pay = await db.query<{ id: string }>(
+      `insert into public.payments (user_id, registration_id, amount, status, gateway, gateway_order_id)
+       values ($1, $2, 999, 'INITIATED', 'mock', 'order_fail_1') returning id`,
+      [failUser, reg.rows[0].id]);
+
+    await db.query(`select public.fail_payment($1, 'Card declined.')`, [pay.rows[0].id]);
+
+    const after = await db.query<{ status: string; payment_status: string }>(
+      `select status, payment_status from public.registrations where user_id = $1`, [failUser]);
+    // Both must move — the admin's "Payment failed" filter reads status.
+    expect(after.rows[0]).toMatchObject({
+      status: "PAYMENT_FAILED", payment_status: "FAILED",
+    });
+
+    const notif = await db.query(
+      `select 1 from public.notifications
+        where recipient_user_id = $1 and type = 'PAYMENT_FAILED'`, [failUser]);
+    expect(notif.rows).toHaveLength(1);
+
+    // A retry must be possible: PAYMENT_FAILED -> PAYMENT_SUCCESS is NOT a
+    // legal transition, so begin_payment_retry has to return it to PENDING
+    // first. Without that, the fix above would break every retry.
+    await db.query(`select public.begin_payment_retry($1)`, [failUser]);
+    const retrying = await db.query<{ status: string }>(
+      `select status from public.registrations where user_id = $1`, [failUser]);
+    expect(retrying.rows[0].status).toBe("PAYMENT_PENDING");
+
+    const pay2 = await db.query<{ id: string }>(
+      `insert into public.payments (user_id, registration_id, amount, status, gateway, gateway_order_id)
+       values ($1, $2, 999, 'INITIATED', 'mock', 'order_fail_2') returning id`,
+      [failUser, reg.rows[0].id]);
+    const confirmed = await db.query<{ r: { registration_status: string } }>(
+      `select public.confirm_payment($1, 'pay_retry_1') as r`, [pay2.rows[0].id]);
+    expect(confirmed.rows[0].r.registration_status).toBe("PENDING_VERIFICATION");
+  });
+
+  it("leaves an already-succeeded payment alone if fail_payment is replayed", async () => {
+    const pay = await db.query<{ id: string }>(
+      `select id from public.payments where user_id = $1 and status = 'SUCCESS' limit 1`, [userId]);
+    await db.query(`select public.fail_payment($1, 'late webhook')`, [pay.rows[0].id]);
+
+    const after = await db.query<{ status: string; payment_status: string }>(
+      `select r.status, r.payment_status from public.registrations r where r.user_id = $1`, [userId]);
+    expect(after.rows[0].payment_status).toBe("SUCCESS");
+  });
+
   it("is idempotent, so a replayed webhook cannot double-advance it", async () => {
     const pay = await db.query<{ id: string }>(
       `select id from public.payments where user_id = $1`, [userId]);

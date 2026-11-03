@@ -2,7 +2,7 @@ import { z } from "zod";
 import { route } from "@/lib/api/handler";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaymentProvider } from "@/lib/services/payment";
-import { badRequest, AppError } from "@/lib/utils/errors";
+import { badRequest, AppError, fromPostgres } from "@/lib/utils/errors";
 
 export const runtime = "nodejs";
 
@@ -15,6 +15,15 @@ export const POST = route(
     }
 
     const db = createAdminClient();
+
+    // A previous attempt failed, so this is a retry. The status machine allows
+    // PAYMENT_FAILED -> PAYMENT_PENDING but NOT PAYMENT_FAILED ->
+    // PAYMENT_SUCCESS, so the registration has to come back to PENDING before
+    // confirm_payment can advance it (migration 0010).
+    if (user!.registrationStatus === "PAYMENT_FAILED") {
+      const { error } = await db.rpc("begin_payment_retry", { p_user_id: user!.id });
+      if (error) throw fromPostgres(error);
+    }
 
     const { data: setting } = await db
       .from("admin_settings").select("value").eq("key", "registration_fee").maybeSingle();

@@ -786,6 +786,7 @@ export interface Database {
       admin_dashboard_stats: { Args: Record<string, never>; Returns: Json };
       admin_recent_activity: { Args: { p_limit?: number | null }; Returns: Json };
       admin_registration_list: { Args: { p_search?: string | null; p_status?: string | null; p_limit?: number | null; p_offset?: number | null }; Returns: Json };
+      begin_payment_retry: { Args: { p_user_id: string }; Returns: undefined };
       check_rate_limit: { Args: { p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean };
       cleanup_expired: { Args: Record<string, never>; Returns: Json };
       confirm_payment: { Args: { p_payment_id: string; p_gateway_payment_id: string }; Returns: Json };

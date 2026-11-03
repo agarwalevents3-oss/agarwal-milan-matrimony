@@ -10,7 +10,7 @@ insert into public.site_content (key, value) values
   ('hero', jsonb_build_object(
     'title',    'Find the one who feels like home',
     'subtitle', 'A considered, private matrimonial service for families who value trust as much as tradition.',
-    'ctaPrimary',   'Register free',
+    'ctaPrimary',   'Register Now',
     'ctaSecondary', 'Login'
   )),
   ('about', jsonb_build_object(
@@ -32,7 +32,7 @@ insert into public.site_content (key, value) values
     'button',   'Create your profile'
   )),
   ('contact', jsonb_build_object(
-    'companyName', 'Your Company Name',
+    'companyName', 'Agarwal Milan Matrimony',
     'phone',       '+91 00000 00000',
     'email',       'hello@example.com',
     'address',     'Address line 1, City, State 000000',

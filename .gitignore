@@ -51,3 +51,19 @@ next-env.d.ts
 /test-results
 /playwright-report
 /blob-report
+
+
+# Local development tools
+.claude/
+.playwright-mcp/
+
+# Test screenshots
+/t01-*.png
+/t02-*.png
+/t03-*.png
+/t04-*.png
+/t05-*.png
+/t06-*.png
+/t07-*.png
+/t08-*.png
+/t09-*.png

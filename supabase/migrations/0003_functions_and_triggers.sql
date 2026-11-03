@@ -348,131 +348,240 @@ $$;
 -- both are ACCEPTED. PRD §10.4 branches on "if NO: no match", which only has
 -- meaning under this reading — if accepting always produced a match the check
 -- would be dead logic. See docs/DECISIONS.md.
-create or replace function public.respond_to_interest(p_interest_id uuid, p_action text)
+create or replace function public.respond_to_interest(
+  p_interest_id uuid,
+  p_action text
+)
 returns jsonb
-language plpgsql security definer
+language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
   v_actor       uuid := (select auth.uid());
-  v_interest    public.interests;
-  v_reciprocal  public.interests;
-  v_match_id    uuid;
-  v_a uuid; v_b uuid;
+  v_interest   public.interests;
+  v_match_id   uuid;
+  v_a           uuid;
+  v_b           uuid;
   v_actor_name  text;
   v_other_name  text;
-  v_created     boolean := false;
 begin
+
+  -- ------------------------------------------------------------
+  -- 1. Authentication
+  -- ------------------------------------------------------------
   if v_actor is null then
-    raise exception 'Not authenticated' using errcode = '42501';
+    raise exception 'Not authenticated'
+      using errcode = '42501';
   end if;
+
+  -- ------------------------------------------------------------
+  -- 2. Validate action
+  -- ------------------------------------------------------------
   if p_action not in ('ACCEPT', 'REJECT') then
-    raise exception 'Invalid action' using errcode = '22023';
+    raise exception 'Invalid action'
+      using errcode = '22023';
   end if;
 
-  -- Row lock: two concurrent responses serialise here rather than racing.
-  select * into v_interest from public.interests where id = p_interest_id for update;
-  if not found then
-    raise exception 'Interest not found' using errcode = 'P0002';
-  end if;
-  if v_interest.receiver_user_id <> v_actor then
-    raise exception 'You are not the recipient of this interest' using errcode = '42501';
-  end if;
-  if v_interest.status <> 'PENDING' then
-    raise exception 'This interest has already been answered' using errcode = '22023';
-  end if;
-
-  update public.interests
-     set status = (case when p_action = 'ACCEPT' then 'ACCEPTED' else 'REJECTED' end)::public.interest_status,
-         responded_at = now()
-   where id = p_interest_id
-  returning * into v_interest;
-
-  select full_name into v_actor_name from public.profiles where user_id = v_actor;
-  select full_name into v_other_name from public.profiles where user_id = v_interest.sender_user_id;
-
-  if p_action = 'REJECT' then
-    perform public.notify_user(
-      v_interest.sender_user_id, 'INTEREST_REJECTED',
-      'Interest declined',
-      'Your interest was not accepted.',
-      v_actor, v_interest.id, null
-    );
-    return jsonb_build_object('status', 'REJECTED', 'matched', false);
-  end if;
-
-  perform public.notify_user(
-    v_interest.sender_user_id, 'INTEREST_ACCEPTED',
-    'Interest accepted',
-    v_actor_name || ' accepted your interest.',
-    v_actor, v_interest.id, null
-  );
-
-  -- Mutual check: is there an accepted interest in the opposite direction?
-  select * into v_reciprocal
+  -- ------------------------------------------------------------
+  -- 3. Lock and fetch the interest
+  -- ------------------------------------------------------------
+  select *
+    into v_interest
     from public.interests
-   where sender_user_id   = v_actor
-     and receiver_user_id = v_interest.sender_user_id
-     and status = 'ACCEPTED'
+   where id = p_interest_id
    for update;
 
   if not found then
-    return jsonb_build_object('status', 'ACCEPTED', 'matched', false);
+    raise exception 'Interest not found'
+      using errcode = 'P0002';
   end if;
 
+  -- ------------------------------------------------------------
+  -- 4. Make sure current user is the receiver
+  -- ------------------------------------------------------------
+  if v_interest.receiver_user_id <> v_actor then
+    raise exception 'You are not the recipient of this interest'
+      using errcode = '42501';
+  end if;
+
+  -- ------------------------------------------------------------
+  -- 5. Prevent responding to an already-processed interest
+  -- ------------------------------------------------------------
+  if v_interest.status <> 'PENDING' then
+    raise exception 'This interest has already been answered'
+      using errcode = '22023';
+  end if;
+
+  -- ------------------------------------------------------------
+  -- 6. Update interest status
+  -- ------------------------------------------------------------
+  update public.interests
+     set status = (
+       case
+         when p_action = 'ACCEPT' then 'ACCEPTED'
+         else 'REJECTED'
+       end
+     )::public.interest_status,
+         responded_at = now()
+   where id = p_interest_id
+   returning *
+        into v_interest;
+
+  -- ------------------------------------------------------------
+  -- 7. Get names for notifications
+  -- ------------------------------------------------------------
+  select full_name
+    into v_actor_name
+    from public.profiles
+   where user_id = v_actor;
+
+  select full_name
+    into v_other_name
+    from public.profiles
+   where user_id = v_interest.sender_user_id;
+
+  -- ============================================================
+  -- REJECT
+  -- ============================================================
+  if p_action = 'REJECT' then
+
+    perform public.notify_user(
+      v_interest.sender_user_id,
+      'INTEREST_REJECTED',
+      'Interest declined',
+      'Your interest was not accepted.',
+      v_actor,
+      v_interest.id,
+      null
+    );
+
+    return jsonb_build_object(
+      'status', 'REJECTED',
+      'matched', false
+    );
+
+  end if;
+
+  -- ============================================================
+  -- ACCEPT
+  -- ============================================================
+
+  -- Notify the person who originally sent the interest
+  perform public.notify_user(
+    v_interest.sender_user_id,
+    'INTEREST_ACCEPTED',
+    'Interest accepted',
+    v_actor_name || ' accepted your interest.',
+    v_actor,
+    v_interest.id,
+    null
+  );
+
+  -- ------------------------------------------------------------
+  -- IMPORTANT:
+  -- An accepted interest itself creates the match.
+  --
+  -- Example:
+  -- A -> B
+  -- A -> C
+  -- A -> D
+  --
+  -- If C accepts:
+  -- A <-> C becomes a match immediately.
+  --
+  -- B and D remain independent.
+  -- No reverse interest is required.
+  -- ------------------------------------------------------------
+
+  -- Always store the smaller UUID as user_a_id and larger UUID
+  -- as user_b_id so the same pair cannot create duplicate rows.
   v_a := least(v_actor, v_interest.sender_user_id);
   v_b := greatest(v_actor, v_interest.sender_user_id);
 
-  insert into public.matches (user_a_id, user_b_id)
-  values (v_a, v_b)
-  on conflict (user_a_id, user_b_id) do nothing
-  returning id into v_match_id;
+  -- ------------------------------------------------------------
+  -- Create the match
+  -- ------------------------------------------------------------
+  insert into public.matches (
+    user_a_id,
+    user_b_id
+  )
+  values (
+    v_a,
+    v_b
+  )
+  on conflict (user_a_id, user_b_id)
+  do nothing
+  returning id
+       into v_match_id;
 
+  -- ------------------------------------------------------------
+  -- If this pair was already matched, don't send duplicate
+  -- MATCH_CREATED notifications.
+  -- ------------------------------------------------------------
   if v_match_id is null then
-    -- Already matched; nothing further to announce.
-    select id into v_match_id from public.matches where user_a_id = v_a and user_b_id = v_b;
-    return jsonb_build_object('status', 'ACCEPTED', 'matched', true, 'match_id', v_match_id, 'new', false);
+
+    select id
+      into v_match_id
+      from public.matches
+     where user_a_id = v_a
+       and user_b_id = v_b;
+
+    return jsonb_build_object(
+      'status', 'ACCEPTED',
+      'matched', true,
+      'match_id', v_match_id,
+      'new', false
+    );
+
   end if;
 
-  perform public.notify_user(v_actor, 'MATCH_CREATED', 'It''s a match!',
-    'You and ' || v_other_name || ' have matched.', v_interest.sender_user_id, null, v_match_id);
-  perform public.notify_user(v_interest.sender_user_id, 'MATCH_CREATED', 'It''s a match!',
-    'You and ' || v_actor_name || ' have matched.', v_actor, null, v_match_id);
-  perform public.notify_admins('ADMIN_NOTIFICATION', 'New match',
-    v_actor_name || ' and ' || v_other_name || ' matched.', v_actor);
+  -- ------------------------------------------------------------
+  -- Notify current user
+  -- ------------------------------------------------------------
+  perform public.notify_user(
+    v_actor,
+    'MATCH_CREATED',
+    'It''s a match!',
+    'You and ' || v_other_name || ' have matched.',
+    v_interest.sender_user_id,
+    null,
+    v_match_id
+  );
 
-  return jsonb_build_object('status', 'ACCEPTED', 'matched', true, 'match_id', v_match_id, 'new', true);
-end;
-$$;
+  -- ------------------------------------------------------------
+  -- Notify the person who sent the interest
+  -- ------------------------------------------------------------
+  perform public.notify_user(
+    v_interest.sender_user_id,
+    'MATCH_CREATED',
+    'It''s a match!',
+    'You and ' || v_actor_name || ' have matched.',
+    v_actor,
+    null,
+    v_match_id
+  );
 
--- ── Rate limiting, without a paid Redis tier ────────────────────────────────
--- Fixed-window counter. Returns true when the request is allowed.
-create or replace function public.check_rate_limit(
-  p_key             text,
-  p_limit           integer,
-  p_window_seconds  integer
-)
-returns boolean
-language plpgsql security definer
-set search_path = ''
-as $$
-declare
-  v_now    timestamptz := now();
-  v_start  timestamptz;
-  v_count  integer;
-begin
-  insert into public.rate_limits (bucket_key, window_start, count)
-  values (p_key, v_now, 1)
-  on conflict (bucket_key) do update
-    set window_start = case
-          when public.rate_limits.window_start < v_now - make_interval(secs => p_window_seconds)
-          then v_now else public.rate_limits.window_start end,
-        count = case
-          when public.rate_limits.window_start < v_now - make_interval(secs => p_window_seconds)
-          then 1 else public.rate_limits.count + 1 end
-  returning window_start, count into v_start, v_count;
+  -- ------------------------------------------------------------
+  -- Notify admins
+  -- ------------------------------------------------------------
+  perform public.notify_admins(
+    'ADMIN_NOTIFICATION',
+    'New match',
+    v_actor_name || ' and ' || v_other_name || ' matched.',
+    v_actor
+  );
 
-  return v_count <= p_limit;
+  -- ------------------------------------------------------------
+  -- Return successful match result to the API
+  -- ------------------------------------------------------------
+  return jsonb_build_object(
+    'status', 'ACCEPTED',
+    'matched', true,
+    'match_id', v_match_id,
+    'new', true
+  );
+
 end;
 $$;
 

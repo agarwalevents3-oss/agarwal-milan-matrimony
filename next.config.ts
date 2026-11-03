@@ -24,7 +24,7 @@ const csp = [
   // Next injects inline bootstrap scripts; 'unsafe-inline' is required for them.
   scriptSrc,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${supabaseOrigin}`,
+  `img-src 'self' data: blob: ${supabaseOrigin}  https://images.unsplash.com https://images.pexels.com https://res.cloudinary.com`,
   "font-src 'self' data:",
   `connect-src 'self' ${supabaseOrigin} ${supabaseWs}`,
   "frame-ancestors 'none'",

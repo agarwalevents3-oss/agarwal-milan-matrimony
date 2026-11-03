@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -10,6 +8,13 @@ import { cn } from "@/lib/utils/cn";
  * Links rather than buttons: each page is a real URL, so it is shareable and
  * the back button behaves. Page numbers are windowed so the control stays one
  * line on a phone even at page 300.
+ *
+ * Deliberately a SERVER component. It has no state, no handlers and no hooks —
+ * it only renders <Link>s — and marking it "use client" made `hrefFor` a
+ * function prop crossing the server/client boundary, which React cannot
+ * serialise. That threw a 500 on every list with more than one page, while
+ * single-page and empty lists rendered fine (the element is only created in
+ * the non-empty branch), so it hid until there was real data.
  */
 export function Pagination({ page, totalPages, hrefFor }: {
   page: number; totalPages: number; hrefFor: (page: number) => string;

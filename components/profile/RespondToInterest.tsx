@@ -31,9 +31,18 @@ export function RespondToInterest({
       const response = await apiPost<{ result: { matched: boolean; new?: boolean } }>(
         "/api/interest/respond", { interestId, action },
       );
+
       if (response.result?.matched && response.result?.new) {
+        // A match is the emotional peak of the product (PRD §10.5), so the
+        // celebration is shown BEFORE refreshing. Refreshing first would
+        // re-render the list this component lives in, and since the interest
+        // is no longer PENDING it would be dropped from that list — unmounting
+        // the celebration before anyone saw it. The refresh happens on dismiss.
         setMatched(true);
+        onDone?.();
+        return;
       }
+
       onDone?.();
       router.refresh();
     } catch (e) {
@@ -43,11 +52,36 @@ export function RespondToInterest({
     }
   }
 
+  function dismissMatch() {
+    setMatched(false);
+    router.refresh();
+  }
+
   if (matched) {
+    // Fixed overlay rather than inline, for the same reason: it must not depend
+    // on this component's place in a list that is about to change.
     return (
-      <Alert tone="success" title="It's a match!">
-        You and {senderName} have both accepted. We have let you both know.
-      </Alert>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`You matched with ${senderName}`}
+        className="fixed inset-0 z-50 grid place-items-center bg-ink/50 p-4"
+      >
+        <div className="w-full max-w-sm rounded-card bg-surface p-8 text-center shadow-lift">
+          <span aria-hidden className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-primary-soft text-primary">
+            <PartyPopper className="h-8 w-8" />
+          </span>
+          <h2 className="mt-5 font-display text-2xl font-semibold text-ink">It&apos;s a match!</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            You and {senderName} have both accepted. We have let you both know,
+            and our team will help arrange the introduction.
+          </p>
+          <div className="mt-7 flex flex-col gap-2.5">
+            <Button onClick={() => router.push("/matches")}>View your matches</Button>
+            <Button variant="ghost" onClick={dismissMatch}>Keep browsing</Button>
+          </div>
+        </div>
+      </div>
     );
   }
 

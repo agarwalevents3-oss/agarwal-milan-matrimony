@@ -2,13 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, Heart } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { ButtonLink } from "@/components/ui/Button";
 
-/**
- * Public header (PRD §4.1). Collapses to a disclosure menu on mobile, which is
- * the one piece of the marketing site that genuinely needs client JS.
- */
 export function SiteHeader({ companyName }: { companyName: string }) {
   const [open, setOpen] = useState(false);
 
@@ -17,65 +13,176 @@ export function SiteHeader({ companyName }: { companyName: string }) {
     { href: "/contact", label: "Contact" },
   ];
 
+  const brandName = "Agarwal Milan Matrimony";
+
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur-sm">
-      <div className="container-page flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-          <span aria-hidden className="grid h-8 w-8 place-items-center rounded-full bg-primary-soft text-primary">
-            <Heart className="h-4 w-4 fill-current" />
+    <header className="sticky top-0 z-40 border-b border-[#F0E1E5] bg-white/95 backdrop-blur-md">
+
+      {/* =====================================================
+          DESKTOP / MAIN HEADER
+      ====================================================== */}
+
+      <div className="container-page flex h-[86px] items-center justify-between gap-6">
+
+        {/* =================================================
+            BRAND
+        ================================================== */}
+
+        <Link
+          href="/"
+          className="group flex items-center gap-4"
+          aria-label={brandName}
+        >
+
+          {/* LOGO */}
+          <span className="flex h-[70px] w-[70px] shrink-0 items-center justify-center overflow-hidden">
+
+            <img
+              src="/agarwal-milan-logo.png"
+              alt="Agarwal Milan Matrimony"
+              className="h-[68px] w-[70px] object-contain transition-transform duration-300 group-hover:scale-105"
+            />
+
           </span>
-          <span className="truncate">{companyName || "Matrimony"}</span>
+
+
+          {/* COMPANY NAME */}
+          <span className="whitespace-nowrap font-display text-[22px] font-semibold leading-tight tracking-[-0.015em] text-[#35282D]">
+            {brandName}
+          </span>
+
         </Link>
 
-        <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+
+        {/* =================================================
+            DESKTOP NAV
+        ================================================== */}
+
+        <nav
+          aria-label="Main"
+          className="hidden items-center gap-3 md:flex"
+        >
+
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-full px-4 py-2 text-sm font-medium text-body transition-colors hover:bg-primary-soft hover:text-primary"
+              className="rounded-full px-6 py-3 text-[17px] font-medium text-[#62585D] transition-all duration-300 hover:bg-[#FFF0F4] hover:text-[#B94D6A]"
             >
               {link.label}
             </Link>
           ))}
+
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
-          <ButtonLink href="/login" variant="secondary" size="sm">Login</ButtonLink>
-          <ButtonLink href="/register" size="sm">Register</ButtonLink>
+
+        {/* =================================================
+            DESKTOP ACTIONS
+        ================================================== */}
+
+        <div className="hidden items-center gap-3 md:flex">
+
+          <ButtonLink
+            href="/login"
+            variant="secondary"
+            size="sm"
+            className="min-h-[46px] border-[#EBC7D1] px-7 text-[16px] font-semibold"
+          >
+            Login
+          </ButtonLink>
+
+
+          <ButtonLink
+            href="/register"
+            size="sm"
+            className="min-h-[46px] px-7 text-[16px] font-semibold shadow-[0_8px_22px_rgba(185,77,106,0.20)]"
+          >
+            Register
+          </ButtonLink>
+
         </div>
+
+
+        {/* =================================================
+            MOBILE MENU BUTTON
+        ================================================== */}
 
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="-mr-2 grid h-11 w-11 place-items-center rounded-full text-body md:hidden"
+          className="-mr-2 grid h-12 w-12 place-items-center rounded-full text-[#5E5559] transition-colors hover:bg-[#FFF0F4] hover:text-[#B94D6A] md:hidden"
           aria-expanded={open}
           aria-controls="mobile-nav"
           aria-label={open ? "Close menu" : "Open menu"}
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+
+          {open ? (
+            <X className="h-6 w-6" />
+          ) : (
+            <Menu className="h-6 w-6" />
+          )}
+
         </button>
+
       </div>
 
+
+      {/* =====================================================
+          MOBILE NAV
+      ====================================================== */}
+
       {open && (
-        <div id="mobile-nav" className="border-t border-line bg-surface md:hidden">
-          <nav aria-label="Main" className="container-page flex flex-col py-3">
+        <div
+          id="mobile-nav"
+          className="border-t border-[#F0E1E5] bg-white md:hidden"
+        >
+
+          <nav
+            aria-label="Main"
+            className="container-page flex flex-col py-5"
+          >
+
             {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-3 text-sm font-medium text-body hover:bg-primary-soft hover:text-primary"
+                className="rounded-xl px-5 py-4 text-[17px] font-medium text-[#62585D] transition-colors hover:bg-[#FFF0F4] hover:text-[#B94D6A]"
               >
                 {link.label}
               </Link>
             ))}
-            <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3">
-              <ButtonLink href="/login" variant="secondary" onClick={() => setOpen(false)}>Login</ButtonLink>
-              <ButtonLink href="/register" onClick={() => setOpen(false)}>Register</ButtonLink>
+
+
+            {/* MOBILE ACTIONS */}
+
+            <div className="mt-4 flex flex-col gap-3 border-t border-[#F0E1E5] pt-5">
+
+              <ButtonLink
+                href="/login"
+                variant="secondary"
+                onClick={() => setOpen(false)}
+                className="min-h-[48px] text-[16px] font-semibold"
+              >
+                Login
+              </ButtonLink>
+
+
+              <ButtonLink
+                href="/register"
+                onClick={() => setOpen(false)}
+                className="min-h-[48px] text-[16px] font-semibold"
+              >
+                Register
+              </ButtonLink>
+
             </div>
+
           </nav>
+
         </div>
       )}
+
     </header>
   );
 }
