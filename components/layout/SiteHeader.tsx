@@ -13,7 +13,7 @@ export function SiteHeader({ companyName }: { companyName: string }) {
     { href: "/contact", label: "Contact" },
   ];
 
-  const brandName = "Agarwal Milan Matrimony";
+  const brandName = "Agarwal Enterprises";
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#F0E1E5] bg-white/95 backdrop-blur-md">
