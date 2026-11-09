@@ -9,13 +9,35 @@ import { z } from "zod";
  */
 
 /** Indian mobile: 10 digits starting 6–9, normalised to E.164. */
+
+/** Indian mobile: 10 digits starting 6–9, normalised to E.164. */
 export const mobileSchema = z
   .string()
   .trim()
-  .transform((v) => v.replace(/[\s-]/g, "").replace(/^(\+91|91|0)/, ""))
+  .transform((v) => {
+    const cleaned = v.replace(/[\s-]/g, "");
+
+    if (cleaned.startsWith("+91")) {
+      return cleaned.slice(3);
+    }
+
+    if (cleaned.length === 12 && cleaned.startsWith("91")) {
+      return cleaned.slice(2);
+    }
+
+    if (cleaned.length === 11 && cleaned.startsWith("0")) {
+      return cleaned.slice(1);
+    }
+
+    return cleaned;
+  })
   .pipe(
-    z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number."),
+    z.string().regex(
+      /^[6-9]\d{9}$/,
+      "Enter a valid 10-digit Indian mobile number.",
+    ),
   );
+
 
 /** The E.164 form we store and hand to Supabase Auth. */
 export const toE164 = (tenDigits: string) => `+91${tenDigits}`;

@@ -38,7 +38,7 @@ export function MobileStep({
       <div>
         <h1 className="text-2xl sm:text-3xl">Create your profile</h1>
         <p className="mt-2 text-sm text-muted">
-          We will send a 6-digit code to confirm your number.
+          We will send a 4-digit code to confirm your number.
         </p>
       </div>
 
