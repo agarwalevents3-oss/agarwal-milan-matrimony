@@ -47,7 +47,7 @@ export const passwordSchema = z
 export const otpSchema = z
   .string()
   .trim()
-  .regex(/^\d{6}$/, "Enter the 6-digit code.");
+  .regex(/^\d{4}$/, "Enter the 4-digit code.");
 
 export const genderSchema = z.enum(["MALE", "FEMALE", "OTHER"]);
 
