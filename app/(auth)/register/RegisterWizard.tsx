@@ -45,7 +45,7 @@ export function RegisterWizard({ userId: initialUserId }: { userId: string | nul
         {step === "otp" && (
           <OtpStep
             mobile={mobile}
-            devCode={devCode}
+
             onBack={() => setStep("mobile")}
             onVerified={(value) => {
               setTicket(value);
