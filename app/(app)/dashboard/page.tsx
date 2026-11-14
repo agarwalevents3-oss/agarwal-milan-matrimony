@@ -25,13 +25,18 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
+ const user = await getSessionUser();
+if (!user) redirect("/login");
 
-  // Access is enforced again server-side, not merely by the proxy (PRD §15.2).
-  if (user.registrationStatus !== "VERIFIED") {
-    redirect(landingPathFor(user.registrationStatus));
-  }
+// Admin accounts should use the admin dashboard, not member registration.
+if (user.role === "admin") {
+  redirect("/admin");
+}
+
+// Member access requires a verified registration.
+if (user.registrationStatus !== "VERIFIED") {
+  redirect(landingPathFor(user.registrationStatus));
+}
 
   const filters = decodeFilters(await searchParams);
   const { profiles, total, page, totalPages } = await searchProfiles(filters, user.id);
