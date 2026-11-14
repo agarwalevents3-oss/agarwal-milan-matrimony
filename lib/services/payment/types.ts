@@ -24,15 +24,25 @@ export interface CreatedOrder {
 }
 
 export interface VerifyInput {
+  /** OUR stored order id — never the one the browser reports back. */
   orderId: string;
   paymentId: string;
   signature: string;
+  /** What our payment record says was due, to check against the gateway. */
+  expectedAmountInPaise: number;
+  expectedCurrency: string;
 }
 
 export interface VerifyResult {
   ok: boolean;
   gatewayPaymentId?: string;
   reason?: string;
+  /**
+   * The gateway could not be asked (network, outage). Neither success nor
+   * failure is proven, so the payment must NOT be marked failed — the webhook
+   * settles it once the gateway reports.
+   */
+  inconclusive?: boolean;
 }
 
 export interface WebhookEvent {
@@ -40,6 +50,11 @@ export interface WebhookEvent {
   orderId?: string;
   paymentId?: string;
   status: "SUCCESS" | "FAILED" | "IGNORED";
+  /** As reported by the gateway, checked against our record before confirming. */
+  amountInPaise?: number;
+  currency?: string;
+  /** Gateway's failure description, stored on the payment row. */
+  reason?: string;
   raw: unknown;
 }
 

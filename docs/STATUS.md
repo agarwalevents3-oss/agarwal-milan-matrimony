@@ -5,6 +5,14 @@ stubbed, and what has not been verified.
 
 Last updated: 2026-09-19.
 
+> **2026-11-13 — Website Improvements implemented, not yet deployed.** Footer,
+> mandatory personal details, verification-pending message, refund and privacy
+> policies, membership/payment readiness for Razorpay, favicon, plus migrations
+> 0011–0012 (which include a payment security fix). Everything changed, how it
+> was tested, what is still a placeholder, and the deployment order (migrations
+> **before** the app) is in [`WEBSITE_IMPROVEMENTS_REPORT.md`](WEBSITE_IMPROVEMENTS_REPORT.md).
+> The sections below predate it.
+
 ---
 
 ## Summary

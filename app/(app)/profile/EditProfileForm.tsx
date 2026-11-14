@@ -7,6 +7,7 @@ import { apiPost } from "@/lib/api/client";
 import { Field, Input, Select, Textarea } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
+import { missingPersonalDetails, REQUIRED_PERSONAL_DETAILS } from "@/lib/validation/registration";
 import type { MyProfile } from "@/lib/services/myProfile";
 
 /**
@@ -72,6 +73,24 @@ export function EditProfileForm({ profile }: { profile: MyProfile }) {
   async function save(values: FormValues) {
     setError(null);
     setSaved(false);
+
+    // The mandatory personal details (Website Improvements §3) can be changed
+    // here but not emptied. Date of birth is excluded: it is set during
+    // registration or on the post-payment form, never on this page.
+    const missing = missingPersonalDetails({
+      heightCm: values.heightCm, maritalStatus: values.maritalStatus, gotra: values.gotra,
+      highestQualification: values.highestQualification, occupation: values.occupation,
+      city: values.city, state: values.state, pincode: values.pincode,
+      fatherName: values.fatherName, motherName: values.motherName,
+    }).filter((key) => key !== "dob");
+    if (missing.length) {
+      const labels = REQUIRED_PERSONAL_DETAILS
+        .filter((d) => (missing as string[]).includes(d.key))
+        .map((d) => d.label);
+      setError(`These details are required: ${labels.join(", ")}.`);
+      return;
+    }
+
     try {
       await apiPost("/api/profile/update", {
         // dob is sent only when it has never been set; the database refuses
@@ -116,12 +135,12 @@ export function EditProfileForm({ profile }: { profile: MyProfile }) {
         >
           {({ id }) => <Input id={id} type="date" disabled={dobLocked} {...register("dob")} />}
         </Field>
-        <Field label="Height (cm)">
+        <Field label="Height (cm)" required>
           {({ id }) => <Input id={id} type="number" min={120} max={250} {...register("heightCm")} />}
         </Field>
         <Field label="Place of birth">{({ id }) => <Input id={id} {...register("placeOfBirth")} />}</Field>
         <Field label="Time of birth">{({ id }) => <Input id={id} type="time" {...register("timeOfBirth")} />}</Field>
-        <Field label="Marital status">
+        <Field label="Marital status" required>
           {({ id }) => (
             <Select id={id} {...register("maritalStatus")}>
               <option value="">Select</option>
@@ -132,13 +151,13 @@ export function EditProfileForm({ profile }: { profile: MyProfile }) {
             </Select>
           )}
         </Field>
-        <Field label="Gotra">{({ id }) => <Input id={id} {...register("gotra")} />}</Field>
+        <Field label="Gotra" required>{({ id }) => <Input id={id} {...register("gotra")} />}</Field>
         <Field label="Subcaste">{({ id }) => <Input id={id} {...register("subcaste")} />}</Field>
       </Section>
 
       <Section title="Education & career">
-        <Field label="Highest qualification">{({ id }) => <Input id={id} {...register("highestQualification")} />}</Field>
-        <Field label="Occupation">{({ id }) => <Input id={id} {...register("occupation")} />}</Field>
+        <Field label="Highest qualification" required>{({ id }) => <Input id={id} {...register("highestQualification")} />}</Field>
+        <Field label="Occupation" required>{({ id }) => <Input id={id} {...register("occupation")} />}</Field>
         <Field label="Company or business">{({ id }) => <Input id={id} {...register("companyBusiness")} />}</Field>
         <Field label="Annual income (₹)">{({ id }) => <Input id={id} type="number" min={0} {...register("annualIncomeInr")} />}</Field>
       </Section>
@@ -147,14 +166,14 @@ export function EditProfileForm({ profile }: { profile: MyProfile }) {
         <div className="sm:col-span-2">
           <Field label="Address">{({ id }) => <Input id={id} {...register("line1")} />}</Field>
         </div>
-        <Field label="City">{({ id }) => <Input id={id} {...register("city")} />}</Field>
-        <Field label="State">{({ id }) => <Input id={id} {...register("state")} />}</Field>
-        <Field label="PIN code">{({ id }) => <Input id={id} inputMode="numeric" maxLength={6} {...register("pincode")} />}</Field>
+        <Field label="City" required>{({ id }) => <Input id={id} {...register("city")} />}</Field>
+        <Field label="State" required>{({ id }) => <Input id={id} {...register("state")} />}</Field>
+        <Field label="PIN code" required>{({ id }) => <Input id={id} inputMode="numeric" maxLength={6} {...register("pincode")} />}</Field>
       </Section>
 
       <Section title="Family">
-        <Field label="Father's name">{({ id }) => <Input id={id} {...register("fatherName")} />}</Field>
-        <Field label="Mother's name">{({ id }) => <Input id={id} {...register("motherName")} />}</Field>
+        <Field label="Father's name" required>{({ id }) => <Input id={id} {...register("fatherName")} />}</Field>
+        <Field label="Mother's name" required>{({ id }) => <Input id={id} {...register("motherName")} />}</Field>
         <Field label="Native place">{({ id }) => <Input id={id} {...register("native")} />}</Field>
         <Field label="Siblings">{({ id }) => <Input id={id} {...register("siblings")} />}</Field>
       </Section>

@@ -63,12 +63,50 @@ export class RazorpayProvider implements PaymentProvider {
     };
   }
 
-  async verify({ orderId, paymentId, signature }: VerifyInput): Promise<VerifyResult> {
-    const { keySecret } = this.credentials();
+  /**
+   * Server-side verification (Website Improvements §6.3B step 4).
+   *
+   * 1. The checkout signature, HMAC-SHA256 of `order_id|payment_id` over OUR
+   *    stored order id — proves the payment belongs to this order.
+   * 2. The payment as Razorpay itself records it — proves it is for this
+   *    order, for the amount and currency we asked for, and actually went
+   *    through (authorized or captured). A manipulated or replayed browser
+   *    response cannot pass both.
+   */
+  async verify({
+    orderId, paymentId, signature, expectedAmountInPaise, expectedCurrency,
+  }: VerifyInput): Promise<VerifyResult> {
+    const { keyId, keySecret } = this.credentials();
     const expected = createHmac("sha256", keySecret).update(`${orderId}|${paymentId}`).digest("hex");
-    return RazorpayProvider.safeEqual(expected, signature)
-      ? { ok: true, gatewayPaymentId: paymentId }
-      : { ok: false, reason: "Signature mismatch" };
+    if (!RazorpayProvider.safeEqual(expected, signature ?? "")) {
+      return { ok: false, reason: "Signature mismatch" };
+    }
+
+    let payment: { order_id?: string; amount?: number; currency?: string; status?: string };
+    try {
+      const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+        headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}` },
+      });
+      if (!response.ok) {
+        console.error("[payment:razorpay] payment lookup failed", response.status, await response.text());
+        return { ok: false, inconclusive: true, reason: "Payment lookup failed" };
+      }
+      payment = await response.json();
+    } catch (error) {
+      console.error("[payment:razorpay] payment lookup failed", error);
+      return { ok: false, inconclusive: true, reason: "Payment lookup failed" };
+    }
+
+    if (payment.order_id !== orderId) return { ok: false, reason: "Order mismatch" };
+    if (payment.amount !== expectedAmountInPaise) return { ok: false, reason: "Amount mismatch" };
+    if (payment.currency?.toUpperCase() !== expectedCurrency.toUpperCase()) {
+      return { ok: false, reason: "Currency mismatch" };
+    }
+    if (payment.status !== "captured" && payment.status !== "authorized") {
+      return { ok: false, reason: `Payment status is ${payment.status ?? "unknown"}` };
+    }
+
+    return { ok: true, gatewayPaymentId: paymentId };
   }
 
   async parseWebhook(rawBody: string, signature: string | null): Promise<WebhookEvent> {
@@ -83,7 +121,14 @@ export class RazorpayProvider implements PaymentProvider {
 
     const event = JSON.parse(rawBody) as {
       event: string;
-      payload?: { payment?: { entity?: { id?: string; order_id?: string } } };
+      payload?: {
+        payment?: {
+          entity?: {
+            id?: string; order_id?: string; amount?: number; currency?: string;
+            error_description?: string | null;
+          };
+        };
+      };
     };
     const entity = event.payload?.payment?.entity;
 
@@ -92,6 +137,15 @@ export class RazorpayProvider implements PaymentProvider {
       : event.event === "payment.failed" ? "FAILED"
       : "IGNORED";
 
-    return { type: event.event, orderId: entity?.order_id, paymentId: entity?.id, status, raw: event };
+    return {
+      type: event.event,
+      orderId: entity?.order_id,
+      paymentId: entity?.id,
+      status,
+      amountInPaise: entity?.amount,
+      currency: entity?.currency,
+      reason: entity?.error_description ?? undefined,
+      raw: event,
+    };
   }
 }

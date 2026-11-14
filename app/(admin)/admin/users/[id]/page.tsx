@@ -5,7 +5,7 @@ import { ArrowLeft, Phone, Mail } from "lucide-react";
 import { getAdminUserDetail } from "@/lib/services/admin";
 import { formatHeight, formatIncome } from "@/lib/utils/age";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { StatusBadge, PaymentBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge, PaymentBadge } from "@/components/ui/Badge";
 import { ProfilePhoto } from "@/components/ui/ProfilePhoto";
 import { DetailList } from "@/components/profile/DetailList";
 import { DocumentViewer } from "@/components/admin/DocumentViewer";
@@ -195,12 +195,17 @@ export default async function AdminUserDetailPage({
                         ₹{payment.amount.toLocaleString("en-IN")} {payment.currency}
                       </p>
                       <p className="mt-0.5 text-xs text-muted">
-                        {payment.gateway}
+                        {payment.gateway === "mock" ? "Demo gateway" : payment.gateway}
                         {payment.gatewayPaymentId && ` · ${payment.gatewayPaymentId}`}
                       </p>
                       <p className="mt-0.5 text-xs text-muted">{formatDateTime(payment.createdAt)}</p>
                     </div>
-                    <PaymentBadge status={payment.status} />
+                    <div className="flex items-center gap-2">
+                      {/* Website Improvements §6.3: demo transactions must be
+                          unmistakable — no money moved. */}
+                      {payment.gateway === "mock" && <Badge tone="warning">Demo · no money received</Badge>}
+                      <PaymentBadge status={payment.status} />
+                    </div>
                   </li>
                 ))}
               </ul>

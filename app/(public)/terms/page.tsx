@@ -74,7 +74,7 @@ export default function TermsPage() {
           </h2>
           <p className="leading-8 text-gray-700">
             You must not impersonate another person, provide misleading
-            information, misuse another member's personal information,
+            information, misuse another member&apos;s personal information,
             harass members, upload unlawful content, or attempt to access
             accounts or systems without authorization. You must use
             information obtained through the platform responsibly.

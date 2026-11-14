@@ -38,7 +38,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/dashboard") || pathname.startsWith("/profile") ||
     pathname.startsWith("/profiles") || pathname.startsWith("/notifications") ||
     pathname.startsWith("/interests") || pathname.startsWith("/matches") ||
-    pathname.startsWith("/status") || pathname.startsWith("/payment");
+    pathname.startsWith("/status") || pathname.startsWith("/payment") ||
+    pathname.startsWith("/personal-details");
   const isAdminArea = pathname.startsWith("/admin");
 
   if (!user && (isAuthedArea || isAdminArea)) {

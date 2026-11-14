@@ -213,7 +213,9 @@ export default async function HomePage() {
         }
       `}</style>
 
-      <main className="overflow-hidden bg-[#FFFDFC] text-[#35282D]">
+      {/* A <div>, not a second <main>: the public layout already wraps this
+          page in the single main landmark. */}
+      <div className="overflow-hidden bg-[#FFFDFC] text-[#35282D]">
 
         {/* =====================================================
             HERO
@@ -1008,34 +1010,10 @@ export default async function HomePage() {
 
         </section>
 
-      </main>
+      </div>
 
-      {/* =====================================================
-    FOOTER — LEGAL & INFORMATION LINKS
-====================================================== */}
-<footer className="border-t border-[#EAD9DE] bg-[#FFF7F8] py-8">
-  <div className="container-page flex flex-col items-center justify-between gap-5 sm:flex-row">
-
-    <p className="text-sm text-[#75696D]">
-      © {new Date().getFullYear()} Agarwal Milan Matrimony. All rights reserved.
-    </p>
-
-    <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm font-medium text-[#75696D]">
-      <a href="/about" className="transition-colors hover:text-primary">
-        About Us
-      </a>
-
-      <a href="/terms" className="transition-colors hover:text-primary">
-        Terms & Conditions
-      </a>
-
-      <a href="/refund-policy" className="transition-colors hover:text-primary">
-        Refund Policy
-      </a>
-    </nav>
-
-  </div>
-</footer>
+      {/* The footer — legal and information links included — is the shared
+          SiteFooter rendered by the public layout (Website Improvements §2). */}
     </>
   );
 }

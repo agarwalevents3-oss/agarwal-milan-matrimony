@@ -430,6 +430,8 @@ export interface Database {
           created_at: string;
           updated_at: string;
           verified_at: string | null;
+          membership_plan: string | null;
+          failure_reason: string | null;
         };
         Insert: {
           id?: string;
@@ -446,6 +448,8 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           verified_at?: string | null;
+          membership_plan?: string | null;
+          failure_reason?: string | null;
         };
         Update: {
           id?: string;
@@ -462,6 +466,8 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           verified_at?: string | null;
+          membership_plan?: string | null;
+          failure_reason?: string | null;
         };
         Relationships: [
           {

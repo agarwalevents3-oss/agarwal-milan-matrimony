@@ -104,15 +104,93 @@ export const createAccountSchema = z.object({
   email: emailSchema,
 });
 
-/** POSTed to /api/register/draft as the user works through the optional steps. */
+/** Every profile section, each one optional. The base for the schema below. */
 export const saveDraftSchema = profileStepSchema
   .omit({ fullName: true, gender: true, email: true })
   .partial();
+
+// ── Mandatory personal details (Website Improvements §3) ────────────────────
+//
+// The PRD made every field of the "About you" form optional; the client has
+// since made a core set mandatory. That set is defined ONCE here and used by:
+//   · personalDetailsSchema  — the form in the browser and /api/register/draft
+//   · missingPersonalDetails — the post-payment gate (lib/auth/guards.ts)
+// so the form, the API and the gate cannot disagree about what "complete" is.
+// Everything not listed stays optional.
+
+export const REQUIRED_PERSONAL_DETAILS = [
+  { key: "dob",                  label: "Date of birth" },
+  { key: "heightCm",             label: "Height" },
+  { key: "maritalStatus",        label: "Marital status" },
+  { key: "gotra",                label: "Gotra" },
+  { key: "highestQualification", label: "Highest qualification" },
+  { key: "occupation",           label: "Occupation" },
+  { key: "city",                 label: "City" },
+  { key: "state",                label: "State" },
+  { key: "pincode",              label: "PIN code" },
+  { key: "fatherName",           label: "Father's name" },
+  { key: "motherName",           label: "Mother's name" },
+] as const;
+
+export type RequiredPersonalDetail = (typeof REQUIRED_PERSONAL_DETAILS)[number]["key"];
+
+/** The stored values of the required details, flattened across their tables. */
+export type PersonalDetailsSnapshot = Record<RequiredPersonalDetail, string | number | null | undefined>;
+
+/** The required details that are still empty. An empty list means complete. */
+export function missingPersonalDetails(
+  snapshot: Partial<PersonalDetailsSnapshot>,
+): RequiredPersonalDetail[] {
+  return REQUIRED_PERSONAL_DETAILS
+    .map((d) => d.key)
+    .filter((key) => {
+      const value = snapshot[key];
+      return value === null || value === undefined || String(value).trim() === "";
+    });
+}
+
+const requiredText = (message: string, max: number) =>
+  z.string({ error: message }).trim().min(1, message).max(max);
+
+/**
+ * The "About you" form with the mandatory set enforced. POSTed to
+ * /api/register/draft, both during registration and when a paid member is
+ * completing details they skipped earlier.
+ */
+export const personalDetailsSchema = saveDraftSchema.extend({
+  dob: z.string({ error: "Enter your date of birth." }).pipe(dobSchema),
+  heightCm: z.number({ error: "Enter your height in cm." }).pipe(heightCmSchema),
+  maritalStatus: z.enum(maritalStatusSchema.options, { error: "Select your marital status." }),
+  gotra: requiredText("Enter your gotra.", 80),
+  highestQualification: requiredText("Enter your highest qualification.", 120),
+  occupation: requiredText("Enter your occupation.", 120),
+
+  address: z.object(
+    {
+      line1: z.string().trim().max(200).optional(),
+      city: requiredText("Enter your city.", 80),
+      state: requiredText("Enter your state.", 80),
+      pincode: z.string({ error: "Enter your 6-digit PIN code." }).pipe(pincodeSchema),
+    },
+    { error: "Enter your city, state and PIN code." },
+  ),
+
+  family: z.object(
+    {
+      fatherName: requiredText("Enter your father's name.", 120),
+      motherName: requiredText("Enter your mother's name.", 120),
+      native: z.string().trim().max(120).optional(),
+      siblings: z.string().trim().max(400).optional(),
+    },
+    { error: "Enter your father's and mother's names." },
+  ),
+});
 
 /** POSTed to /api/register/submit once the documents are uploaded. */
 export const submitRegistrationSchema = documentsStepSchema;
 
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type SaveDraftInput = z.infer<typeof saveDraftSchema>;
+export type PersonalDetailsInput = z.infer<typeof personalDetailsSchema>;
 export type SubmitRegistrationInput = z.infer<typeof submitRegistrationSchema>;
 export type ProfileStepInput = z.infer<typeof profileStepSchema>;

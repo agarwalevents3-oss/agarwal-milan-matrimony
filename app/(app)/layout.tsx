@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import { getSessionUser } from "@/lib/auth/guards";
+import { needsPersonalDetails, PERSONAL_DETAILS_PATH } from "@/lib/auth/routing";
 import { getSiteContent } from "@/lib/services/content";
 import { getUnreadCount } from "@/lib/services/engagement";
 import { AccountMenu } from "@/components/layout/AccountMenu";
@@ -19,6 +20,11 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  // Paid but personal details incomplete: nothing in the member area —
+  // status, dashboard or otherwise — until the mandatory form is saved
+  // (Website Improvements §3). The form itself lives outside this layout.
+  if (needsPersonalDetails(user)) redirect(PERSONAL_DETAILS_PATH);
 
   const verified = user.registrationStatus === "VERIFIED";
   const [{ contact }, unread] = await Promise.all([getSiteContent(), getUnreadCount()]);

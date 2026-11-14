@@ -26,6 +26,40 @@ export function canBrowse(status: RegistrationStatus): boolean {
   return status === "VERIFIED";
 }
 
+/** Where the mandatory personal-details form lives (Website Improvements §3). */
+export const PERSONAL_DETAILS_PATH = "/personal-details";
+
+/**
+ * A member who has paid but not yet given the mandatory personal details must
+ * complete them before going any further: before the verification screen,
+ * and before the dashboard for a member verified before the details became
+ * mandatory. Payment is never asked for again — this only applies once the
+ * payment has already succeeded.
+ *
+ * Rejected, suspended and deleted accounts are deliberately excluded: they see
+ * their account status, not a form.
+ */
+export function needsPersonalDetails(user: {
+  registrationStatus: RegistrationStatus;
+  paymentStatus: Enums["payment_status"];
+  personalDetailsComplete: boolean;
+}): boolean {
+  return (
+    !user.personalDetailsComplete &&
+    user.paymentStatus === "SUCCESS" &&
+    ["PAYMENT_SUCCESS", "PENDING_VERIFICATION", "VERIFIED"].includes(user.registrationStatus)
+  );
+}
+
+/** The message an unverified member sees after logging in (Website Improvements §4). */
+export const PROFILE_UNDER_VERIFICATION = {
+  title: "Profile Under Verification",
+  body:
+    "Your profile is currently under verification by our admin team. " +
+    "You will be able to access your account once your profile has been verified.",
+  help: "For further information or assistance, please contact us.",
+} as const;
+
 export const STATUS_COPY: Record<RegistrationStatus, { title: string; body: string; tone: "info" | "success" | "warning" | "danger" }> = {
   DRAFT: {
     title: "Your registration is not finished",
@@ -47,14 +81,16 @@ export const STATUS_COPY: Record<RegistrationStatus, { title: string; body: stri
     body: "Your last payment did not go through. You can try again at any time.",
     tone: "danger",
   },
+  // Both "paid, not yet verified" states show the same message, word for word
+  // as specified in Website Improvements §4.
   PAYMENT_SUCCESS: {
-    title: "Payment received",
-    body: "Thank you. We are moving your profile into the verification queue.",
-    tone: "success",
+    title: PROFILE_UNDER_VERIFICATION.title,
+    body: PROFILE_UNDER_VERIFICATION.body,
+    tone: "info",
   },
   PENDING_VERIFICATION: {
-    title: "Awaiting verification",
-    body: "Our team is reviewing your profile and documents. Most reviews finish within 24 hours, and you will be notified here as soon as it is done.",
+    title: PROFILE_UNDER_VERIFICATION.title,
+    body: PROFILE_UNDER_VERIFICATION.body,
     tone: "info",
   },
   VERIFIED: {

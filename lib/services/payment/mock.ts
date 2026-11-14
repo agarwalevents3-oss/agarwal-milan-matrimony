@@ -7,7 +7,12 @@ import type {
 } from "./types";
 
 /**
- * Development gateway.
+ * Demo gateway (Website Improvements §6.3A). No money ever moves.
+ *
+ * Every demo transaction is identifiable in the payment records: gateway
+ * "mock", order ids "mock_order_…", payment ids "mock_pay_…". Whether it may
+ * be used at all is decided by demoPaymentsAllowed() in lib/env.ts, which
+ * every demo code path checks.
  *
  * It deliberately imitates Razorpay's shape, including a real HMAC signature
  * over `orderId|paymentId`. That is not theatre: it means the verification code

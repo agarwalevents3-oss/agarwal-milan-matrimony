@@ -19,14 +19,28 @@ const scriptSrc = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
   : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
+// Razorpay Checkout (Website Improvements §6.3) loads its script from
+// checkout.razorpay.com and runs the payment form in an iframe on
+// api.razorpay.com. Those origins are allowed ONLY when Razorpay is the active
+// gateway, so the policy stays as tight as before until it is switched on.
+const razorpay = process.env.PAYMENT_MODE === "razorpay"
+  ? {
+      script: " https://checkout.razorpay.com",
+      frame: "frame-src https://api.razorpay.com https://checkout.razorpay.com",
+      connect: " https://api.razorpay.com https://lumberjack.razorpay.com",
+      img: " https://cdn.razorpay.com",
+    }
+  : { script: "", frame: "", connect: "", img: "" };
+
 const csp = [
   "default-src 'self'",
   // Next injects inline bootstrap scripts; 'unsafe-inline' is required for them.
-  scriptSrc,
+  scriptSrc + razorpay.script,
   "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob: ${supabaseOrigin}  https://images.unsplash.com https://images.pexels.com https://res.cloudinary.com`,
+  `img-src 'self' data: blob: ${supabaseOrigin}  https://images.unsplash.com https://images.pexels.com https://res.cloudinary.com${razorpay.img}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseOrigin} ${supabaseWs}`,
+  `connect-src 'self' ${supabaseOrigin} ${supabaseWs}${razorpay.connect}`,
+  ...(razorpay.frame ? [razorpay.frame] : []),
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -33,7 +33,7 @@ export default function AboutPage() {
         <p className="mb-5 leading-8 text-gray-700">
           We encourage members to provide accurate information and exercise
           care when communicating with other members. Profile verification
-          does not guarantee a person's identity, background, or intentions.
+          does not guarantee a person&apos;s identity, background, or intentions.
         </p>
 
         <h2 className="mb-3 mt-8 text-xl font-semibold text-[#35282D]">

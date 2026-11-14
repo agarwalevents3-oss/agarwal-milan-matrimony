@@ -8,7 +8,7 @@ import { test, expect, type Page } from "@playwright/test";
  * Supabase project. See e2e/README.md. Never point this at production — it
  * creates accounts and then deletes them.
  *
- * It assumes OTP_MODE=mock (so the code is returned by the API) and
+ * It assumes OTP_MODE=mock (every code is MOCK_OTP_CODE, 4 digits) and
  * PAYMENT_MODE=mock (so the checkout can be simulated).
  */
 
@@ -34,8 +34,9 @@ test.describe("Full journey (live database)", () => {
     await page.getByLabel(/mobile number/i).fill(person.mobile);
     await page.getByRole("button", { name: /send code/i }).click();
 
-    // In mock mode the code is prefilled from the API response.
-    await expect(page.getByLabel(/6-digit code/i)).not.toHaveValue("");
+    // In mock mode every code is MOCK_OTP_CODE (4 digits since the MSG91
+    // change); the form no longer prefills it.
+    await page.getByLabel(/4-digit code/i).fill(process.env.MOCK_OTP_CODE ?? "1234");
     await page.getByRole("button", { name: /^verify$/i }).click();
 
     await page.getByLabel(/full name/i).fill(person.name);
@@ -45,9 +46,23 @@ test.describe("Full journey (live database)", () => {
     await page.getByLabel(/confirm password/i).fill(password);
     await page.getByRole("button", { name: /continue/i }).click();
 
-    // Optional details — skip straight through to documents.
+    // The mandatory personal details (Website Improvements §3) — the step can
+    // no longer be skipped. Optional fields are left empty.
     await expect(page.getByRole("heading", { name: /about you/i })).toBeVisible();
-    await page.getByRole("button", { name: /skip for now/i }).click();
+    await expect(page.getByRole("button", { name: /skip for now/i })).toHaveCount(0);
+    // Required labels end with an asterisk ("PIN code*"), hence the \*? below.
+    await page.getByLabel(/^Date of birth\*?$/).fill("1996-04-12");
+    await page.getByLabel(/^Height \(cm\)\*?$/).fill("168");
+    await page.getByLabel(/^Marital status\*?$/).selectOption("NEVER_MARRIED");
+    await page.getByLabel(/^Gotra\*?$/).fill("Garg");
+    await page.getByLabel(/^Highest qualification\*?$/).fill("B.Com");
+    await page.getByLabel(/^Occupation\*?$/).fill("Accountant");
+    await page.getByLabel(/^City\*?$/).fill("Hyderabad");
+    await page.getByLabel(/^State\*?$/).fill("Telangana");
+    await page.getByLabel(/^PIN code\*?$/).fill("500001");
+    await page.getByLabel(/^Father's name\*?$/).fill("E2E Father");
+    await page.getByLabel(/^Mother's name\*?$/).fill("E2E Mother");
+    await page.getByRole("button", { name: /save and continue/i }).click();
 
     await expect(page.getByRole("heading", { name: /documents/i })).toBeVisible();
   }
@@ -82,6 +97,9 @@ test.describe("Full journey (live database)", () => {
     await page.getByLabel(/mobile number/i).fill(ADMIN_MOBILE);
     await page.getByLabel(/password/i).fill(ADMIN_PASSWORD);
     await page.getByRole("button", { name: /^login$/i }).click();
+    // Sign-in completes in the browser; navigating before it lands would be
+    // (correctly) bounced back to /login.
+    await page.waitForURL(/\/admin/);
 
     await page.goto("/admin/registrations?status=PAYMENT_PENDING");
     await expect(page.getByRole("heading", { name: /registrations/i })).toBeVisible();
