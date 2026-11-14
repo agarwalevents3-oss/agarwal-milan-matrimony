@@ -51,7 +51,15 @@ export async function updateSession(request: NextRequest) {
 
   // A hint only — every /api/admin route re-checks the database role, and RLS
   // enforces it independently. Good enough for a redirect, which is all this is.
-  const isAdmin = (user?.app_metadata as { role?: string } | null)?.role === "admin";
+  const { data: profile } = user
+  ? await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()
+  : { data: null };
+
+const isAdmin = profile?.role === "admin";
 
   // /register is deliberately NOT redirected here: a signed-in member may be
   // resuming an interrupted DRAFT registration. That decision needs the
